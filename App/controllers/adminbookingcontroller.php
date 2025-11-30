@@ -5,16 +5,13 @@ namespace App\Controllers;
 use App\Core\Controller;
 use App\Core\Auth;
 use App\Models\BookingAdmin;
+use App\Models\BookingReschedule;
 use App\Models\Room;
+
 
 class AdminBookingController extends Controller
 {
-    /**
-     * List semua booking untuk admin.
-     * View: app/views/admin/kelolabooking.php
-     * 
-     * Rute: index.php?controller=adminBooking&action=manage
-     */
+
     public function manage()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -36,12 +33,6 @@ class AdminBookingController extends Controller
         ]);
     }
 
-    /**
-     * Detail booking (booking + room + pj + anggota).
-     * View: app/views/admin/booking-detail.php
-     * 
-     * Rute: index.php?controller=adminBooking&action=detail&id=123
-     */
     public function detail()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -70,14 +61,6 @@ class AdminBookingController extends Controller
             'booking' => $booking,
         ]);
     }
-
-    /**
-     * CREATE INTERNAL booking
-     * GET  → tampilkan form
-     * POST → simpan ke DB lewat BookingAdmin::createInternalBooking()
-     * 
-     * Rute: index.php?controller=adminBooking&action=createInternal
-     */
     public function createInternal()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -136,13 +119,6 @@ class AdminBookingController extends Controller
         ]);
     }
 
-    /**
-     * CREATE EKSTERNAL booking
-     * GET  → tampilkan form
-     * POST → simpan ke DB lewat BookingAdmin::createExternalBooking()
-     * 
-     * Rute: index.php?controller=adminBooking&action=createExternal
-     */
     public function createExternal()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -209,13 +185,6 @@ class AdminBookingController extends Controller
         ]);
     }
 
-    /**
-     * EDIT booking (internal / eksternal)
-     * GET  → tampilkan form edit
-     * POST → update data booking via BookingAdmin::updateAdminBooking()
-     * 
-     * Rute: index.php?controller=adminBooking&action=edit&id=123
-     */
     public function edit()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -293,11 +262,6 @@ class AdminBookingController extends Controller
         ]);
     }
 
-    /**
-     * DELETE booking
-     * Rute: POST index.php?controller=adminBooking&action=delete
-     * Param: id_booking (POST)
-     */
     public function delete()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -321,10 +285,6 @@ class AdminBookingController extends Controller
         );
     }
 
-    /**
-     * APPROVE booking (status → approved)
-     * Rute: POST index.php?controller=adminBooking&action=approve
-     */
     public function approve()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -349,10 +309,6 @@ class AdminBookingController extends Controller
         );
     }
 
-    /**
-     * REJECT booking (status → rejected)
-     * Rute: POST index.php?controller=adminBooking&action=reject
-     */
     public function reject()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -379,14 +335,6 @@ class AdminBookingController extends Controller
         );
     }
 
-    /**
-     * MULAI booking (Hari H – checkin)
-     * - Hanya bisa jika status terakhir 'approved'
-     * - Set checkin_time = NOW()
-     * - Auto-cancel 10 menit hanya berlaku untuk yang belum punya checkin_time
-     * 
-     * Rute: POST index.php?controller=adminBooking&action=start
-     */
     public function start()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -406,7 +354,7 @@ class AdminBookingController extends Controller
 
         // Status terakhir harus APPROVED
         $lastStatus = $bookingModel->getLastStatus($idBooking);
-        if ($lastStatus !== 'approved') {
+        if (!in_array($lastStatus, ['approved', 'reschedule_approved'], true)) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=manage',
                 'Booking hanya dapat dimulai jika sudah disetujui (APPROVED).',
@@ -453,13 +401,6 @@ class AdminBookingController extends Controller
         );
     }
 
-    /**
-     * Tandai booking SELESAI (status → selesai)
-     * - Biasanya dipanggil setelah kunci dikembalikan
-     * - Optional: hanya boleh selesai jika sudah pernah mulai (checkin_time tidak null)
-     * 
-     * Rute: POST index.php?controller=adminBooking&action=complete
-     */
     public function complete()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -486,8 +427,6 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-
-        // Optional: pastikan sudah pernah mulai
         if (empty($booking['checkin_time'])) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=manage',
@@ -496,7 +435,6 @@ class AdminBookingController extends Controller
             );
         }
 
-        // Status terakhir boleh 'approved' atau tetap 'approved' + checkin_time ≠ NULL
         $bookingModel->addStatus($idBooking, 'selesai');
 
         return $this->redirectWithMessage(
@@ -505,13 +443,6 @@ class AdminBookingController extends Controller
         );
     }
 
-    /**
-     * Penutupan perpustakaan: batalkan semua booking di tanggal tertentu.
-     * GET  → tampilkan form pilih tanggal
-     * POST → jalankan cancel massal via BookingAdmin::cancelBookingsByDate()
-     * 
-     * Rute: index.php?controller=adminBooking&action=closeDate
-     */
     public function closeDate()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -541,5 +472,141 @@ class AdminBookingController extends Controller
         $this->view('admin/close-date', [
             // bisa kirim data tambahan kalau perlu
         ]);
+    }
+
+    public function processReschedule()
+    {
+        Auth::requireRole(['admin']); // sesuaikan role admin-mu
+
+        $idBooking = $_GET['id_booking'] ?? null;
+        if (!$idBooking || !ctype_digit((string)$idBooking)) {
+            $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=index',
+                'ID booking tidak valid.',
+                'error'
+            );
+            return;
+        }
+        $idBooking = (int)$idBooking;
+
+        $bookingModel    = new BookingAdmin();
+        $rescheduleModel = new BookingReschedule();
+
+        // detail booking + anggota lama
+        $booking = $bookingModel->findAdminDetail($idBooking);
+        if (!$booking) {
+            $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=index',
+                'Data booking tidak ditemukan.',
+                'error'
+            );
+            return;
+        }
+
+        // pastikan status terakhir = reschedule_pending
+        if (($booking['last_status'] ?? $booking['status'] ?? '') !== 'reschedule_pending') {
+            $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=detail&id=' . $idBooking,
+                'Booking ini tidak memiliki reschedule yang sedang menunggu persetujuan.',
+                'error'
+            );
+            return;
+        }
+
+        // ambil draft reschedule terbaru untuk booking ini
+        $reschedule = $rescheduleModel->findLatestByBooking($idBooking);
+        if (!$reschedule) {
+            $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=detail&id=' . $idBooking,
+                'Data reschedule tidak ditemukan.',
+                'error'
+            );
+            return;
+        }
+
+        $idReschedule = (int)$reschedule['id_reschedule'];
+
+        // anggota jadwal baru (Booking_reschedule_member)
+        $newMembers = $rescheduleModel->getMembers($idReschedule);
+
+        $this->view('admin/reschedule_detail', [
+            'booking'     => $booking,      // booking lama + members
+            'reschedule'  => $reschedule,   // jadwal baru
+            'newMembers'  => $newMembers,
+        ]);
+    }
+
+    /**
+     * Admin menyetujui reschedule.
+     */
+    public function approveReschedule()
+    {
+        Auth::requireRole(['admin']);
+
+        $idReschedule = (int)($this->input('id_reschedule') ?? 0);
+        if (!$idReschedule) {
+            $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=index',
+                'Data reschedule tidak valid.',
+                'error'
+            );
+            return;
+        }
+
+        $bookingModel = new BookingAdmin();
+        $result       = $bookingModel->approveReschedule($idReschedule);
+
+        if (empty($result['success'])) {
+            $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=index',
+                $result['message'] ?? 'Gagal menyetujui reschedule.',
+                'error'
+            );
+            return;
+        }
+
+        $this->redirectWithMessage(
+            'index.php?controller=adminBooking&action=index',
+            'Reschedule berhasil disetujui. Jadwal booking utama telah diperbarui.',
+            'success'
+        );
+    }
+
+    /**
+     * Admin menolak reschedule.
+     */
+    public function rejectReschedule()
+    {
+        Auth::requireRole(['admin']);
+
+        $idReschedule = (int)($this->input('id_reschedule') ?? 0);
+        $alasan       = $this->input('alasan_reject') ?? null;
+
+        if (!$idReschedule) {
+            $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=index',
+                'Data reschedule tidak valid.',
+                'error'
+            );
+            return;
+        }
+
+        $bookingModel = new BookingAdmin();
+        $result       = $bookingModel->rejectReschedule($idReschedule, $alasan);
+
+        if (empty($result['success'])) {
+            $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=index',
+                $result['message'] ?? 'Gagal menolak reschedule.',
+                'error'
+            );
+            return;
+        }
+
+        $this->redirectWithMessage(
+            'index.php?controller=adminBooking&action=index',
+            'Reschedule ditolak.',
+            'success'
+        );
     }
 }

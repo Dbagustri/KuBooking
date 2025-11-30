@@ -6,9 +6,7 @@ use PDO;
 
 class BookingAdmin extends BookingBase
 {
-    /**
-     * Hitung booking hari ini (untuk dashboard)
-     */
+
     public function countToday()
     {
         $sql = "SELECT COUNT(*) AS total 
@@ -18,10 +16,6 @@ class BookingAdmin extends BookingBase
         $row  = $stmt->fetch(PDO::FETCH_ASSOC);
         return (int)($row['total'] ?? 0);
     }
-
-    /**
-     * Booking pending saja (kalau masih mau dipakai di dashboard)
-     */
     public function getPendingForDashboard($limit = 10)
     {
         $sql = "
@@ -142,9 +136,6 @@ class BookingAdmin extends BookingBase
         return $result;
     }
 
-    /**
-     * Detail booking untuk admin (booking + room + pj + members)
-     */
     public function findAdminDetail($idBooking)
     {
         $sql = "
@@ -181,20 +172,11 @@ class BookingAdmin extends BookingBase
         return $booking;
     }
 
-    /**
-     * Generate booking_code random 8 char
-     */
     protected function generateBookingCode()
     {
         return substr(str_shuffle('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'), 0, 8);
     }
 
-    /**
-     * CREATE booking internal (pj = user internal)
-     * Expect $data:
-     * - id_pj, id_ruangan, tanggal (Y-m-d), jam_mulai (HH:MM), durasi (jam),
-     * - jumlah_anggota, keperluan
-     */
     public function createInternalBooking(array $data)
     {
         $idRuangan  = (int)($data['id_ruangan'] ?? 0);
@@ -214,8 +196,26 @@ class BookingAdmin extends BookingBase
             return false;
         }
 
+        // VALIDASI KAPASITAS dengan data ruangan
+        $roomModel = new \App\Models\Room();
+        $room      = $roomModel->findById($idRuangan);
+        if (!$room) {
+            return false;
+        }
+
+        $kapMin = (int)($room['kapasitas_min'] ?? 0);
+        $kapMax = (int)($room['kapasitas_max'] ?? 0);
+
+        if ($kapMax > 0) {
+            if ($jml < $kapMin || $jml > $kapMax) {
+                // jumlah anggota di luar batas kapasitas ruangan
+                return false;
+            }
+        }
+
         $start = $tanggal . ' ' . $jamMulai . ':00';
         $end   = date('Y-m-d H:i:s', strtotime("$start +{$durasi} hour"));
+
         // cek bentrok jadwal
         if ($this->isBentrok($idRuangan, $start, $end)) {
             return false;
@@ -263,6 +263,9 @@ class BookingAdmin extends BookingBase
         }
     }
 
+    /**
+     * CREATE booking eksternal
+     */
     public function createExternalBooking(array $data)
     {
         $idRuangan  = (int)($data['id_ruangan'] ?? 0);
@@ -280,6 +283,27 @@ class BookingAdmin extends BookingBase
 
         if (!$idRuangan || !$tanggal || !$jamMulai || !$durasi || !$guestName) {
             return false;
+        }
+
+        // batas durasi 1–3 jam (kalau mau konsisten)
+        if ($durasi < 1 || $durasi > 3) {
+            return false;
+        }
+
+        // VALIDASI KAPASITAS
+        $roomModel = new \App\Models\Room();
+        $room      = $roomModel->findById($idRuangan);
+        if (!$room) {
+            return false;
+        }
+
+        $kapMin = (int)($room['kapasitas_min'] ?? 0);
+        $kapMax = (int)($room['kapasitas_max'] ?? 0);
+
+        if ($kapMax > 0) {
+            if ($jml < $kapMin || $jml > $kapMax) {
+                return false;
+            }
         }
 
         $start = $tanggal . ' ' . $jamMulai . ':00';
@@ -353,6 +377,27 @@ class BookingAdmin extends BookingBase
             return false;
         }
 
+        // VALIDASI KAPASITAS: kalau ruangan sama, pakai kapasitas dari join;
+        // kalau ruangan ganti, ambil ruangan baru.
+        if ($idRuangan === (int)$booking['id_ruangan']) {
+            $kapMin = (int)($booking['kapasitas_min'] ?? 0);
+            $kapMax = (int)($booking['kapasitas_max'] ?? 0);
+        } else {
+            $roomModel = new \App\Models\Room();
+            $room      = $roomModel->findById($idRuangan);
+            if (!$room) {
+                return false;
+            }
+            $kapMin = (int)($room['kapasitas_min'] ?? 0);
+            $kapMax = (int)($room['kapasitas_max'] ?? 0);
+        }
+
+        if ($kapMax > 0) {
+            if ($jml < $kapMin || $jml > $kapMax) {
+                return false;
+            }
+        }
+
         $start = $tanggal . ' ' . $jamMulai . ':00';
         $end   = date('Y-m-d H:i:s', strtotime("$start +{$durasi} hour"));
 
@@ -414,14 +459,12 @@ class BookingAdmin extends BookingBase
         return $stmt->execute($params);
     }
 
-
-    /**
-     * AUTO CANCEL booking approved yang sudah lewat 10 menit dari jam mulai
-     */
     public function autoCancelLateArrivals()
     {
         $sql = "
-        SELECT b.id_bookings
+        SELECT 
+            b.id_bookings,
+            b.id_pj
         FROM " . self::$table . " b
         LEFT JOIN Booking_status bs_latest
             ON bs_latest.id_status = (
@@ -432,8 +475,8 @@ class BookingAdmin extends BookingBase
         WHERE 
             b.tanggal = CURDATE()
             AND b.submitted = 1
-            AND bs_latest.status = 'approved'
-            AND b.checkin_time IS NULL       -- BELUM diklik Mulai
+            AND bs_latest.status IN ('approved', 'reschedule_approved')
+            AND b.checkin_time IS NULL
             AND b.start_time <= DATE_SUB(NOW(), INTERVAL 10 MINUTE)
     ";
 
@@ -441,17 +484,28 @@ class BookingAdmin extends BookingBase
         $stmt->execute();
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+        // model untuk suspend
+        $accSuspend = new \App\Models\AccountSuspend();
+
         foreach ($rows as $row) {
+            $bookingId = (int)$row['id_bookings'];
+            $pjId      = !empty($row['id_pj']) ? (int)$row['id_pj'] : null;
+
+            // Tambah status cancelled karena auto-cancel
             $this->addStatus(
-                $row['id_bookings'],
+                $bookingId,
                 'cancelled',
                 'Auto cancel: anggota tidak hadir lengkap > 10 menit',
                 null,
                 null
             );
+
+            // Kalau ada PJ-nya, naikkan counter cancel (untuk suspend otomatis)
+            if ($pjId) {
+                $accSuspend->incrementCancel($pjId);
+            }
         }
     }
-
 
     public function approveReschedule(int $idReschedule): array
     {
@@ -473,7 +527,6 @@ class BookingAdmin extends BookingBase
             ];
         }
 
-        // Cek bentrok jadwal baru
         // Cek bentrok jadwal baru, abaikan booking ini sendiri
         if ($this->isBentrokExcept(
             (int)$res['id_ruangan'],
@@ -486,7 +539,6 @@ class BookingAdmin extends BookingBase
                 'message' => 'Jadwal baru bentrok dengan booking lain.'
             ];
         }
-
 
         try {
             self::$db->beginTransaction();
@@ -565,10 +617,6 @@ class BookingAdmin extends BookingBase
         }
     }
 
-
-    /**
-     * REJECT reschedule oleh admin
-     */
     public function rejectReschedule(int $idReschedule, ?string $alasan = null): array
     {
         $resModel = new \App\Models\BookingReschedule();
@@ -598,12 +646,7 @@ class BookingAdmin extends BookingBase
 
         return ['success' => true];
     }
-    /**
-     * Membatalkan semua booking pada tanggal tertentu (YYYY-mm-dd)
-     * tanpa menyentuh logic suspend.
-     * 
-     * return: jumlah booking yang di-cancel
-     */
+
     public function cancelBookingsByDate(string $tanggal): int
     {
         // Ambil booking yang aktif di tanggal tsb
@@ -655,6 +698,10 @@ class BookingAdmin extends BookingBase
             return 0;
         }
     }
+
+    /**
+     * Set checkin_time ketika booking dimulai (oleh admin)
+     */
     public function setCheckinTime(int $idBooking): bool
     {
         $sql = "UPDATE " . self::$table . "

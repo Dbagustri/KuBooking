@@ -9,7 +9,6 @@ use App\Models\BookingUser;
 use App\Models\Room;
 use App\Models\BookingReschedule;
 
-
 class UserBookingController extends Controller
 {
     private function getCurrentAccount(): ?array
@@ -24,11 +23,6 @@ class UserBookingController extends Controller
 
         return $acc ?: null;
     }
-
-    /**
-     * Pastikan user boleh booking (status_aktif = 'aktif').
-     * Return: data account, atau null kalau tidak boleh.
-     */
     private function ensureCanBook(): ?array
     {
         $account = $this->getCurrentAccount();
@@ -371,7 +365,7 @@ class UserBookingController extends Controller
         $bookingModel    = new BookingUser();
         $rescheduleModel = new BookingReschedule();
 
-        // Cek apakah user sudah punya booking aktif (pending / approved)
+        // Cek apakah user sudah punya booking aktif (pending / approved / reschedule_x)
         $activeBooking = $bookingModel->getActiveBookingForUser((int)$idUser);
         if ($activeBooking) {
             $this->redirectWithMessage(
@@ -382,7 +376,7 @@ class UserBookingController extends Controller
             return;
         }
 
-        // Cari booking berdasarkan kode_kelompok
+        // Cari booking berdasarkan kode_kelompok (booking utama)
         $b = $bookingModel->findByKodeKelompok($kode);
 
         if (!$b) {
@@ -402,31 +396,33 @@ class UserBookingController extends Controller
             return;
         }
 
-        $now = date('Y-m-d H:i:s');
-        if ((int)$b['submitted'] === 1 || ($b['group_expire_at'] && $now > $b['group_expire_at'])) {
-            $this->redirect(
-                'index.php?controller=userBooking&action=home&join_error=' .
-                    urlencode('Kelompok sudah tidak aktif')
-            );
-            return;
+        $idBooking  = (int)$b['id_bookings'];
+        $lastStatus = $bookingModel->getLastStatus($idBooking);
+        $now        = date('Y-m-d H:i:s');
+
+        // ===========================
+        // 1) Cek RESCHEDULE group dulu
+        // ===========================
+        // Coba cari "active" reschedule (pakai join_reschedule_until)
+        $activeRes = $rescheduleModel->findActiveRescheduleForBooking($idBooking);
+
+        // Kalau tidak ketemu "active", tapi ada draft reschedule apapun,
+        // dan status booking masih pending/approved, anggap itu draft yang bisa di-join.
+        if (!$activeRes && !in_array($lastStatus, ['reschedule_pending', 'reschedule_approved'], true)) {
+            $draftRes = $rescheduleModel->findLatestByBooking($idBooking);
+            if ($draftRes) {
+                $activeRes = $draftRes;
+            }
         }
 
-        $idBooking = (int)$b['id_bookings'];
-
-        // ==============================
-        // CEK: apakah booking ini sedang RESCHEDULE?
-        // ==============================
-        $lastStatus = $bookingModel->getLastStatus($idBooking);
-        $activeRes  = $rescheduleModel->findActiveRescheduleForBooking($idBooking);
-
-        // MODE 1: Join ke JADWAL BARU (reschedule_pending + window join aktif)
-        if ($activeRes && $lastStatus === 'reschedule_pending') {
+        if ($activeRes && !in_array($lastStatus, ['reschedule_pending', 'reschedule_approved'], true)) {
+            // MODE: Join ke draft RESCHEDULE
             $idReschedule = (int)$activeRes['id_reschedule'];
 
             // Ambil anggota yang sudah join ke draft reschedule
-            $resMembers    = $rescheduleModel->getMembers($idReschedule);
-            $currentCount  = count($resMembers);
-            $capMax        = (int)($activeRes['kapasitas_max'] ?? 0);
+            $resMembers   = $rescheduleModel->getMembers($idReschedule);
+            $currentCount = count($resMembers);
+            $capMax       = (int)($activeRes['kapasitas_max'] ?? 0);
 
             // Kapasitas penuh?
             if ($capMax > 0 && $currentCount >= $capMax) {
@@ -459,7 +455,35 @@ class UserBookingController extends Controller
             return;
         }
 
-        // MODE 2: Join ke BOOKING NORMAL (tidak ada reschedule aktif)
+        // Kalau booking sudah dalam proses reschedule (jadwal baru dikunci)
+        if (in_array($lastStatus, ['reschedule_pending', 'reschedule_approved'], true)) {
+            $this->redirect(
+                'index.php?controller=userBooking&action=home&join_error=' .
+                    urlencode('Kelompok di jadwal baru sudah tidak aktif (waktu join habis / sudah diajukan).')
+            );
+            return;
+        }
+
+        // ========================================
+        // 2) Kalau tidak ada reschedule draft → join KELOMPOK UTAMA
+        // ========================================
+
+        // Di mode ini, baru cek submitted & group_expire_at booking normal
+        if ((int)$b['submitted'] === 1) {
+            $this->redirect(
+                'index.php?controller=userBooking&action=home&join_error=' .
+                    urlencode('Kelompok sudah diajukan ke admin, tidak dapat menerima anggota baru.')
+            );
+            return;
+        }
+
+        if ($b['group_expire_at'] && $now > $b['group_expire_at']) {
+            $this->redirect(
+                'index.php?controller=userBooking&action=home&join_error=' .
+                    urlencode('Kelompok sudah tidak aktif (waktu pembentukan kelompok habis).')
+            );
+            return;
+        }
 
         // Kapasitas pakai data booking + ruangan
         $bookingDetail = $bookingModel->findWithRoom($idBooking);
@@ -485,7 +509,7 @@ class UserBookingController extends Controller
             }
         }
 
-        // Tambah ke Booking_member
+        // Tambah ke Booking_member (kelompok awal)
         $bookingModel->addMember($idBooking, (int)$idUser);
 
         $this->redirect(

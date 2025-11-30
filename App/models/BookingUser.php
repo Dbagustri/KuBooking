@@ -7,7 +7,7 @@ use PDO;
 class BookingUser extends BookingBase
 {
     /**
-     * Riwayat booking user (hanya booking yang sudah disubmit)
+     * Riwayat booking user (hanya booking yang sudah disubmit).
      */
     public function getHistoryByUser(int $idUser, int $limit = 10, int $offset = 0): array
     {
@@ -23,11 +23,17 @@ class BookingUser extends BookingBase
                     r.nama_ruangan,
                     r.lokasi,
                     COALESCE(
-                        (SELECT status FROM Booking_status bs 
-                         WHERE bs.id_bookings = b.id_bookings 
-                         ORDER BY bs.created_at DESC, bs.id_status DESC
-                         LIMIT 1),
-                        CASE WHEN b.submitted = 1 THEN 'pending' ELSE 'draft' END
+                        (
+                            SELECT bs.status 
+                            FROM Booking_status bs 
+                            WHERE bs.id_bookings = b.id_bookings 
+                            ORDER BY bs.created_at DESC, bs.id_status DESC
+                            LIMIT 1
+                        ),
+                        CASE 
+                            WHEN b.submitted = 1 THEN 'pending' 
+                            ELSE 'draft' 
+                        END
                     ) AS status
                 FROM Bookings b
                 JOIN Booking_member bm ON b.id_bookings = bm.id_bookings
@@ -64,33 +70,43 @@ class BookingUser extends BookingBase
     /**
      * Cek apakah user punya booking aktif (lock user):
      * - submitted = 1
-     * - status terakhir 'pending' atau 'approved'
+     * - status terakhir salah satu dari:
+     *   'pending', 'approved', 'reschedule_pending', 'reschedule_approved'
      * - tanggal >= hari ini
+     *
+     * Return: ringkasan untuk ditampilkan di home, atau null kalau tidak ada.
      */
     public function getActiveBookingForUser(int $idUser): ?array
     {
         $sql = "
             SELECT 
                 b.*,
-                r.nama_ruangan
+                r.nama_ruangan,
+                (
+                    SELECT bs2.status
+                    FROM Booking_status bs2
+                    WHERE bs2.id_bookings = b.id_bookings
+                    ORDER BY bs2.created_at DESC, bs2.id_status DESC
+                    LIMIT 1
+                ) AS last_status
             FROM Bookings b
             JOIN Booking_member bm ON bm.id_bookings = b.id_bookings
             JOIN Ruangan r ON b.id_ruangan = r.id_ruangan
-            LEFT JOIN Booking_status bs 
-                ON bs.id_status = (
-                    SELECT MAX(bs2.id_status) 
-                    FROM Booking_status bs2 
-                    WHERE bs2.id_bookings = b.id_bookings
-                )
             WHERE bm.id_user = :id_user
               AND b.submitted = 1
               AND COALESCE(
-                    bs.status,
+                    (
+                        SELECT bs2.status
+                        FROM Booking_status bs2
+                        WHERE bs2.id_bookings = b.id_bookings
+                        ORDER BY bs2.created_at DESC, bs2.id_status DESC
+                        LIMIT 1
+                    ),
                     CASE 
                         WHEN b.submitted = 1 THEN 'pending' 
                         ELSE 'draft' 
                     END
-                  ) IN ('pending', 'approved')
+                  ) IN ('pending', 'approved', 'reschedule_pending', 'reschedule_approved')
               AND b.tanggal >= CURDATE()
             ORDER BY b.tanggal ASC, b.start_time ASC
             LIMIT 1
@@ -114,22 +130,46 @@ class BookingUser extends BookingBase
 
     /**
      * Buat draft booking kelompok (PJ).
-     * Catatan: jumlah_anggota diset 0 dulu, nanti ditambah lewat addMember()
+     * Catatan: jumlah_anggota diset 0 dulu, nanti ditambah lewat addMember().
      */
     public function createGroupBooking(array $data): int
     {
         $sql = "INSERT INTO " . self::$table . "
-            (id_pj, id_ruangan, booking_code, kode_kelompok,
-             start_time, end_time, jumlah_anggota,
-             is_external, surat_izin, reschedule_request,
-             asal_instansi, tanggal, keperluan,
-             group_expire_at, submitted)
+            (
+                id_pj,
+                id_ruangan,
+                booking_code,
+                kode_kelompok,
+                start_time,
+                end_time,
+                jumlah_anggota,
+                is_external,
+                surat_izin,
+                reschedule_request,
+                asal_instansi,
+                tanggal,
+                keperluan,
+                group_expire_at,
+                submitted
+            )
             VALUES
-            (:id_pj, :id_ruangan, :booking_code, :kode_kelompok,
-             :start_time, :end_time, :jumlah_anggota,
-             :is_external, NULL, 0,
-             NULL, :tanggal, :keperluan,
-             :group_expire_at, :submitted)";
+            (
+                :id_pj,
+                :id_ruangan,
+                :booking_code,
+                :kode_kelompok,
+                :start_time,
+                :end_time,
+                :jumlah_anggota,
+                :is_external,
+                NULL,
+                0,
+                NULL,
+                :tanggal,
+                :keperluan,
+                :group_expire_at,
+                :submitted
+            )";
 
         $stmt = self::$db->prepare($sql);
         $stmt->execute([
@@ -156,6 +196,7 @@ class BookingUser extends BookingBase
         $sql = "SELECT * FROM " . self::$table . "
                 WHERE kode_kelompok = :kode
                 LIMIT 1";
+
         $stmt = self::$db->prepare($sql);
         $stmt->execute(['kode' => $kode]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -168,12 +209,13 @@ class BookingUser extends BookingBase
         $sql = "UPDATE " . self::$table . " 
                 SET submitted = 1 
                 WHERE id_bookings = :id";
+
         $stmt = self::$db->prepare($sql);
         $stmt->execute(['id' => $idBooking]);
     }
 
     /**
-     * Cancel booking oleh PJ
+     * Cancel booking oleh PJ.
      */
     public function cancelBooking(int $idBooking, int $idUser): array
     {
@@ -238,6 +280,8 @@ class BookingUser extends BookingBase
             null,
             null
         );
+
+        // Increment counter suspend
         $accSuspend = new \App\Models\AccountSuspend();
         $accSuspend->incrementCancel($idUser);
 

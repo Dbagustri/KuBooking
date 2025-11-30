@@ -118,25 +118,19 @@ class BookingBase extends Model
      */
     public function getMembers(int $idBooking): array
     {
-        $sql = "SELECT bm.id_user, a.nama
+        $sql = "SELECT 
+                    bm.id_user, 
+                    a.nama
                 FROM Booking_member bm
                 JOIN Account a ON a.id_account = bm.id_user
-                WHERE bm.id_bookings = :booking";
+                WHERE bm.id_bookings = :booking
+                ORDER BY a.nama ASC";
 
         $stmt = self::$db->prepare($sql);
         $stmt->execute(['booking' => $idBooking]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    /**
-     * Cek bentrok jadwal di ruangan tertentu
-     *
-     * - Bentrok jika: (start_time < :end AND end_time > :start)
-     * - Hanya hitung booking:
-     *   - submitted = 1, atau
-     *   - group_expire_at masih berlaku (hold 10 menit join)
-     * - Abaikan status yang sudah rejected / cancelled / dibatalkan
-     */
     public function isBentrok(int $idRuangan, string $start, string $end): bool
     {
         $sql = "
@@ -244,6 +238,7 @@ class BookingBase extends Model
 
         return $row['status'] ?? null;
     }
+
     /**
      * Cek bentrok jadwal di ruangan tertentu
      * namun MENGABAIKAN 1 booking tertentu (mis. saat reschedule).
@@ -313,7 +308,7 @@ class BookingBase extends Model
                 )
                 AND (
                     bs_latest.status IS NULL
-                    OR bs_latest.status NOT IN ('rejected', 'cancelled', 'dibatalkan')
+                    OR bs_latest.status NOT IN ('rejected', 'cancelled')
                 )
         ";
 
