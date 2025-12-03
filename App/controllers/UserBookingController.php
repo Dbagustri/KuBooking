@@ -215,8 +215,6 @@ class UserBookingController extends Controller
             );
             return;
         }
-
-        // Validasi durasi
         if ($durasi < 1 || $durasi > 3) {
             $this->redirectWithMessage(
                 'index.php?controller=userBooking&action=home',
@@ -225,8 +223,6 @@ class UserBookingController extends Controller
             );
             return;
         }
-
-        // Cek booking aktif user (pending/approved, tanggal >= hari ini)
         $activeBooking = $bookingModel->getActiveBookingForUser((int)$idUser);
         if ($activeBooking) {
             $this->redirectWithMessage(
@@ -295,8 +291,6 @@ class UserBookingController extends Controller
             'group_expire_at' => $expireAt,
             'submitted'       => 0,
         ]);
-
-        // Masukkan PJ sebagai member pertama
         $bookingModel->addMember($idBooking, (int)$idUser);
 
         $this->redirect(
@@ -375,8 +369,6 @@ class UserBookingController extends Controller
             );
             return;
         }
-
-        // Cari booking berdasarkan kode_kelompok (booking utama)
         $b = $bookingModel->findByKodeKelompok($kode);
 
         if (!$b) {
@@ -399,15 +391,8 @@ class UserBookingController extends Controller
         $idBooking  = (int)$b['id_bookings'];
         $lastStatus = $bookingModel->getLastStatus($idBooking);
         $now        = date('Y-m-d H:i:s');
-
-        // ===========================
-        // 1) Cek RESCHEDULE group dulu
-        // ===========================
-        // Coba cari "active" reschedule (pakai join_reschedule_until)
         $activeRes = $rescheduleModel->findActiveRescheduleForBooking($idBooking);
 
-        // Kalau tidak ketemu "active", tapi ada draft reschedule apapun,
-        // dan status booking masih pending/approved, anggap itu draft yang bisa di-join.
         if (!$activeRes && !in_array($lastStatus, ['reschedule_pending', 'reschedule_approved'], true)) {
             $draftRes = $rescheduleModel->findLatestByBooking($idBooking);
             if ($draftRes) {
@@ -416,15 +401,11 @@ class UserBookingController extends Controller
         }
 
         if ($activeRes && !in_array($lastStatus, ['reschedule_pending', 'reschedule_approved'], true)) {
-            // MODE: Join ke draft RESCHEDULE
             $idReschedule = (int)$activeRes['id_reschedule'];
-
-            // Ambil anggota yang sudah join ke draft reschedule
             $resMembers   = $rescheduleModel->getMembers($idReschedule);
             $currentCount = count($resMembers);
             $capMax       = (int)($activeRes['kapasitas_max'] ?? 0);
 
-            // Kapasitas penuh?
             if ($capMax > 0 && $currentCount >= $capMax) {
                 $this->redirect(
                     'index.php?controller=userBooking&action=home&join_error=' .
@@ -433,10 +414,8 @@ class UserBookingController extends Controller
                 return;
             }
 
-            // Sudah ada di draft reschedule?
             foreach ($resMembers as $m) {
                 if ((int)$m['id_user'] === (int)$idUser) {
-                    // langsung arahkan ke halaman reschedule
                     $this->redirect(
                         "index.php?controller=userReschedule&action=reschedule" .
                             "&id_booking={$idBooking}&id_reschedule={$idReschedule}"
@@ -445,7 +424,6 @@ class UserBookingController extends Controller
                 }
             }
 
-            // Tambahkan user ke Booking_reschedule_member
             $rescheduleModel->addMember($idReschedule, (int)$idUser);
 
             $this->redirect(
@@ -455,7 +433,6 @@ class UserBookingController extends Controller
             return;
         }
 
-        // Kalau booking sudah dalam proses reschedule (jadwal baru dikunci)
         if (in_array($lastStatus, ['reschedule_pending', 'reschedule_approved'], true)) {
             $this->redirect(
                 'index.php?controller=userBooking&action=home&join_error=' .
@@ -464,11 +441,6 @@ class UserBookingController extends Controller
             return;
         }
 
-        // ========================================
-        // 2) Kalau tidak ada reschedule draft → join KELOMPOK UTAMA
-        // ========================================
-
-        // Di mode ini, baru cek submitted & group_expire_at booking normal
         if ((int)$b['submitted'] === 1) {
             $this->redirect(
                 'index.php?controller=userBooking&action=home&join_error=' .
@@ -485,7 +457,6 @@ class UserBookingController extends Controller
             return;
         }
 
-        // Kapasitas pakai data booking + ruangan
         $bookingDetail = $bookingModel->findWithRoom($idBooking);
         $capMax        = (int)$bookingDetail['kapasitas_max'];
 
@@ -497,7 +468,6 @@ class UserBookingController extends Controller
             return;
         }
 
-        // Sudah menjadi member booking utama?
         $members = $bookingModel->getMembers($idBooking);
         foreach ($members as $m) {
             if ((int)$m['id_user'] === (int)$idUser) {
@@ -509,7 +479,6 @@ class UserBookingController extends Controller
             }
         }
 
-        // Tambah ke Booking_member (kelompok awal)
         $bookingModel->addMember($idBooking, (int)$idUser);
 
         $this->redirect(
@@ -540,6 +509,16 @@ class UserBookingController extends Controller
 
         if (!$b || (int)$b['id_pj'] !== (int)$currentId) {
             echo "Tidak diizinkan.";
+            return;
+        }
+        $now = date('Y-m-d H:i:s');
+
+        if ((int)$b['submitted'] === 1 || ($b['group_expire_at'] && $now > $b['group_expire_at'])) {
+            $this->redirectWithMessage(
+                "index.php?controller=userBooking&action=booking&id_ruangan={$b['id_ruangan']}&id_booking={$idBooking}",
+                'Kelompok sudah tidak aktif atau sudah diajukan, anggota tidak dapat diubah.',
+                'error'
+            );
             return;
         }
 

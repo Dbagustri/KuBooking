@@ -7,7 +7,9 @@ use App\Core\Auth;
 use App\Models\BookingAdmin;
 use App\Models\BookingReschedule;
 use App\Models\Room;
-
+use App\Models\AccountSuspend;
+use App\Models\Account;
+use App\Models\BookingUser;
 
 class AdminBookingController extends Controller
 {
@@ -17,21 +19,29 @@ class AdminBookingController extends Controller
         Auth::requireRole(['admin', 'super_admin']);
 
         $bookingModel = new BookingAdmin();
+        $bookingModel->autoCancelLateBookings();
 
-        $page   = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+        // PAGINATION
+        $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
         if ($page < 1) $page = 1;
 
-        $limit  = 50;
+        $limit  = 5;
         $offset = ($page - 1) * $limit;
 
-        // getAllForAdmin: semua booking (pending/approved/rejected/dll)
+        // hitung total data booking (untuk pagination)
+        $totalRows   = $bookingModel->countAllForAdmin();   // <-- method baru di model
+        $totalPages  = $totalRows > 0 ? (int)ceil($totalRows / $limit) : 1;
+
+        // ambil data halaman ini
         $bookings = $bookingModel->getAllForAdmin($limit, $offset);
 
         $this->view('admin/kelolabooking', [
             'bookings'    => $bookings,
             'currentPage' => $page,
+            'totalPages'  => $totalPages,
         ]);
     }
+
 
     public function detail()
     {
@@ -57,67 +67,168 @@ class AdminBookingController extends Controller
             );
         }
 
+        $members = $bookingModel->getMembers((int)$id);
+
         $this->view('admin/booking-detail', [
             'booking' => $booking,
+            'members' => $members,
         ]);
     }
+
     public function createInternal()
     {
         Auth::requireRole(['admin', 'super_admin']);
 
-        $roomModel    = new Room();
-        $rooms        = $roomModel->getAllActive();
-        $bookingModel = new BookingAdmin();
+        $roomModel      = new Room();
+        $rooms          = $roomModel->getAllActive();
+        $bookingModel   = new BookingAdmin();
+        $accountModel   = new \App\Models\Account();
+        $bookingUser    = new \App\Models\BookingUser();
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $idPj          = Auth::id(); // untuk sekarang PJ = admin yang login
-            $idRuangan     = $this->input('id_ruangan');
-            $tanggal       = $this->input('tanggal');
-            $jamMulai      = $this->input('jam_mulai');
-            $durasi        = (int)$this->input('durasi');
-            $jumlahAnggota = (int)$this->input('jumlah_anggota');
-            $keperluan     = $this->input('keperluan');
+        // GET → tampilkan form
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->view('admin/booking-form-internal', [
+                'rooms' => $rooms,
+            ]);
+            return;
+        }
 
-            // validasi sederhana
-            if (!$idRuangan || !$tanggal || !$jamMulai || $durasi <= 0) {
-                return $this->redirectWithMessage(
-                    'index.php?controller=adminBooking&action=createInternal',
-                    'Semua field wajib diisi dengan benar.',
-                    'error'
-                );
-            }
+        // POST → proses simpan
+        $idRuangan  = $this->input('id_ruangan');
+        $tanggal    = $this->input('tanggal');        // format YYYY-mm-dd
+        $jamMulai   = $this->input('jam_mulai');      // HH:ii
+        $durasi     = (int)$this->input('durasi');    // jam
+        $keperluan  = $this->input('keperluan');
+        $members    = $_POST['members'] ?? [];        // array id_account dari form
+        $pjIdInput  = $this->input('pj_id_user');     // boleh kosong, akan diverifikasi lagi
 
-            $data = [
-                'id_pj'           => (int)$idPj,
-                'id_ruangan'      => (int)$idRuangan,
-                'tanggal'         => $tanggal,
-                'jam_mulai'       => $jamMulai,
-                'durasi'          => $durasi,
-                'jumlah_anggota'  => $jumlahAnggota > 0 ? $jumlahAnggota : 1,
-                'keperluan'       => $keperluan,
-            ];
-
-            $idBooking = $bookingModel->createInternalBooking($data);
-
-            if (!$idBooking) {
-                return $this->redirectWithMessage(
-                    'index.php?controller=adminBooking&action=createInternal',
-                    'Gagal membuat booking. Cek kembali jadwal (kemungkinan bentrok).',
-                    'error'
-                );
-            }
-
+        // Validasi dasar
+        if (
+            !$idRuangan ||
+            !$tanggal ||
+            !preg_match('/^\d{4}-\d{2}-\d{2}$/', $tanggal) ||
+            !$jamMulai ||
+            $durasi <= 0
+        ) {
             return $this->redirectWithMessage(
-                'index.php?controller=adminBooking&action=manage',
-                'Booking internal berhasil dibuat.'
+                'index.php?controller=adminBooking&action=createInternal',
+                'Ruangan, tanggal, jam mulai, dan durasi wajib diisi dengan benar.',
+                'error'
             );
         }
 
-        // GET → tampilkan form
-        $this->view('admin/booking-form-internal', [
-            'rooms' => $rooms,
-        ]);
+        // Minimal 1 anggota
+        if (empty($members) || !is_array($members)) {
+            return $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=createInternal',
+                'Minimal 1 anggota harus ditambahkan.',
+                'error'
+            );
+        }
+
+        // Cek ruangan
+        $room = $roomModel->findById((int)$idRuangan);
+        if (!$room) {
+            return $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=createInternal',
+                'Ruangan tidak ditemukan.',
+                'error'
+            );
+        }
+
+        $kapasitasMin = (int)($room['kapasitas_min'] ?? 0);
+        $kapasitasMax = (int)($room['kapasitas_max'] ?? 0);
+
+        // Normalisasi & validasi member (id_account)
+        $validMembers = [];
+        foreach ($members as $mid) {
+            if (!ctype_digit((string)$mid)) {
+                continue;
+            }
+            $mid = (int)$mid;
+            $user = $accountModel->findById($mid);
+            if (!$user) {
+                return $this->redirectWithMessage(
+                    'index.php?controller=adminBooking&action=createInternal',
+                    'Salah satu anggota tidak ditemukan di database (ID: ' . $mid . ').',
+                    'error'
+                );
+            }
+
+            // Pastikan user ini tidak punya booking aktif
+            $active = $bookingUser->getActiveBookingForUser($mid);
+            if ($active) {
+                return $this->redirectWithMessage(
+                    'index.php?controller=adminBooking&action=createInternal',
+                    'User ' . htmlspecialchars($user['nama']) . ' masih memiliki peminjaman aktif.',
+                    'error'
+                );
+            }
+
+            $validMembers[] = $mid;
+        }
+
+        if (empty($validMembers)) {
+            return $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=createInternal',
+                'Daftar anggota tidak valid.',
+                'error'
+            );
+        }
+
+        $jumlahAnggota = count($validMembers);
+
+        // Cek kapasitas ruangan
+        if ($kapasitasMin > 0 && $jumlahAnggota < $kapasitasMin) {
+            return $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=createInternal',
+                'Jumlah anggota kurang dari kapasitas minimum ruangan (' . $kapasitasMin . ').',
+                'error'
+            );
+        }
+
+        if ($kapasitasMax > 0 && $jumlahAnggota > $kapasitasMax) {
+            return $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=createInternal',
+                'Jumlah anggota melebihi kapasitas maksimum ruangan (' . $kapasitasMax . ').',
+                'error'
+            );
+        }
+
+        // Tentukan PJ: harus salah satu dari anggota, kalau input tidak valid → pakai anggota pertama
+        $pjIdUser = (int)($pjIdInput ?? 0);
+        if (!$pjIdUser || !in_array($pjIdUser, $validMembers, true)) {
+            $pjIdUser = $validMembers[0];
+        }
+
+        // Siapkan data untuk model
+        $data = [
+            'id_ruangan'   => (int)$idRuangan,
+            'tanggal'      => $tanggal,
+            'jam_mulai'    => $jamMulai,
+            'durasi'       => $durasi,
+            'keperluan'    => $keperluan,
+            'members'      => $validMembers,
+            'pj_id_user'   => $pjIdUser,
+        ];
+
+        $idBooking = $bookingModel->createInternalBooking($data);
+
+        if (!$idBooking) {
+            return $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=createInternal',
+                'Gagal membuat booking internal. Cek kembali jadwal (kemungkinan bentrok).',
+                'error'
+            );
+        }
+
+        return $this->redirectWithMessage(
+            'index.php?controller=adminBooking&action=manage',
+            'Booking internal berhasil dibuat.'
+        );
     }
+
+
 
     public function createExternal()
     {
@@ -179,7 +290,6 @@ class AdminBookingController extends Controller
             );
         }
 
-        // GET → tampilkan form
         $this->view('admin/booking-form-external', [
             'rooms' => $rooms,
         ]);
@@ -229,8 +339,6 @@ class AdminBookingController extends Controller
                 'jumlah_anggota'  => $jumlahAnggota > 0 ? $jumlahAnggota : (int)$booking['jumlah_anggota'],
                 'keperluan'       => $keperluan !== null ? $keperluan : $booking['keperluan'],
             ];
-
-            // Kalau booking eksternal, ikut update data guest
             if ((int)$booking['is_external'] === 1) {
                 $dataUpdate['guest_name']     = $this->input('guest_name')     ?: $booking['guest_name'];
                 $dataUpdate['guest_email']    = $this->input('guest_email')    ?: $booking['guest_email'];
@@ -255,7 +363,6 @@ class AdminBookingController extends Controller
             );
         }
 
-        // GET → tampilkan form edit
         $this->view('admin/booking-edit', [
             'booking' => $booking,
             'rooms'   => $rooms,
@@ -300,14 +407,31 @@ class AdminBookingController extends Controller
         }
 
         $bookingModel = new BookingAdmin();
+        $idBooking    = (int)$idBooking;
+        $lastStatus = $bookingModel->getLastStatus($idBooking);
 
-        $bookingModel->addStatus((int)$idBooking, 'approved');
+        if (in_array($lastStatus, ['approved', 'reschedule_approved', 'cancelled', 'rejected', 'selesai', 'completed'], true)) {
+            return $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=manage',
+                'Booking ini sudah tidak bisa disetujui lagi.',
+                'error'
+            );
+        }
+        if ($lastStatus === 'reschedule_pending') {
+            return $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=manage',
+                'Booking ini sedang menunggu reschedule. Gunakan menu "Proses Reschedule".',
+                'error'
+            );
+        }
+        $bookingModel->addStatus($idBooking, 'approved');
 
         return $this->redirectWithMessage(
             'index.php?controller=adminBooking&action=manage',
             'Booking berhasil disetujui.'
         );
     }
+
 
     public function reject()
     {
@@ -325,8 +449,18 @@ class AdminBookingController extends Controller
         }
 
         $bookingModel = new BookingAdmin();
+        $idBooking    = (int)$idBooking;
 
-        $bookingModel->addStatus((int)$idBooking, 'rejected', $alasan ?: null);
+        $lastStatus = $bookingModel->getLastStatus($idBooking);
+
+        if (in_array($lastStatus, ['rejected', 'cancelled', 'selesai', 'completed'], true)) {
+            return $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=manage',
+                'Booking ini sudah berstatus final, tidak dapat ditolak lagi.',
+                'error'
+            );
+        }
+        $bookingModel->addStatus($idBooking, 'rejected', $alasan ?: null);
 
         return $this->redirectWithMessage(
             'index.php?controller=adminBooking&action=manage',
@@ -334,6 +468,7 @@ class AdminBookingController extends Controller
             'error'
         );
     }
+
 
     public function start()
     {
@@ -351,8 +486,6 @@ class AdminBookingController extends Controller
 
         $bookingModel = new BookingAdmin();
         $idBooking    = (int)$idBooking;
-
-        // Status terakhir harus APPROVED
         $lastStatus = $bookingModel->getLastStatus($idBooking);
         if (!in_array($lastStatus, ['approved', 'reschedule_approved'], true)) {
             return $this->redirectWithMessage(
@@ -361,8 +494,6 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-
-        // Ambil booking untuk cek checkin_time & start_time
         $booking = $bookingModel->findWithRoom($idBooking);
         if (!$booking) {
             return $this->redirectWithMessage(
@@ -379,8 +510,6 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-
-        // Optional: Jangan mulai sebelum waktu mulai
         $now        = date('Y-m-d H:i:s');
         $start_time = $booking['start_time'];
 
@@ -392,7 +521,6 @@ class AdminBookingController extends Controller
             );
         }
 
-        // Set checkin_time lewat model
         $bookingModel->setCheckinTime($idBooking);
 
         return $this->redirectWithMessage(
@@ -417,8 +545,6 @@ class AdminBookingController extends Controller
 
         $bookingModel = new BookingAdmin();
         $idBooking    = (int)$idBooking;
-
-        // Ambil data booking
         $booking = $bookingModel->findWithRoom($idBooking);
         if (!$booking) {
             return $this->redirectWithMessage(
@@ -434,8 +560,11 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-
         $bookingModel->addStatus($idBooking, 'selesai');
+        if (!empty($booking['id_pj'])) {
+            $accSuspend = new AccountSuspend();
+            $accSuspend->resetCounter((int)$booking['id_pj']);
+        }
 
         return $this->redirectWithMessage(
             'index.php?controller=adminBooking&action=manage',
@@ -476,12 +605,12 @@ class AdminBookingController extends Controller
 
     public function processReschedule()
     {
-        Auth::requireRole(['admin']); // sesuaikan role admin-mu
+        Auth::requireRole(['admin', 'super_admin']);
 
         $idBooking = $_GET['id_booking'] ?? null;
         if (!$idBooking || !ctype_digit((string)$idBooking)) {
             $this->redirectWithMessage(
-                'index.php?controller=adminBooking&action=index',
+                'index.php?controller=adminBooking&action=manage',
                 'ID booking tidak valid.',
                 'error'
             );
@@ -492,18 +621,16 @@ class AdminBookingController extends Controller
         $bookingModel    = new BookingAdmin();
         $rescheduleModel = new BookingReschedule();
 
-        // detail booking + anggota lama
         $booking = $bookingModel->findAdminDetail($idBooking);
         if (!$booking) {
             $this->redirectWithMessage(
-                'index.php?controller=adminBooking&action=index',
+                'index.php?controller=adminBooking&action=manage',
                 'Data booking tidak ditemukan.',
                 'error'
             );
             return;
         }
 
-        // pastikan status terakhir = reschedule_pending
         if (($booking['last_status'] ?? $booking['status'] ?? '') !== 'reschedule_pending') {
             $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=detail&id=' . $idBooking,
@@ -513,7 +640,6 @@ class AdminBookingController extends Controller
             return;
         }
 
-        // ambil draft reschedule terbaru untuk booking ini
         $reschedule = $rescheduleModel->findLatestByBooking($idBooking);
         if (!$reschedule) {
             $this->redirectWithMessage(
@@ -525,28 +651,23 @@ class AdminBookingController extends Controller
         }
 
         $idReschedule = (int)$reschedule['id_reschedule'];
-
-        // anggota jadwal baru (Booking_reschedule_member)
-        $newMembers = $rescheduleModel->getMembers($idReschedule);
+        $newMembers   = $rescheduleModel->getMembers($idReschedule);
 
         $this->view('admin/reschedule_detail', [
-            'booking'     => $booking,      // booking lama + members
-            'reschedule'  => $reschedule,   // jadwal baru
+            'booking'     => $booking,
+            'reschedule'  => $reschedule,
             'newMembers'  => $newMembers,
         ]);
     }
 
-    /**
-     * Admin menyetujui reschedule.
-     */
     public function approveReschedule()
     {
-        Auth::requireRole(['admin']);
+        Auth::requireRole(['admin', 'super_admin']);
 
         $idReschedule = (int)($this->input('id_reschedule') ?? 0);
         if (!$idReschedule) {
             $this->redirectWithMessage(
-                'index.php?controller=adminBooking&action=index',
+                'index.php?controller=adminBooking&action=manage',
                 'Data reschedule tidak valid.',
                 'error'
             );
@@ -558,33 +679,36 @@ class AdminBookingController extends Controller
 
         if (empty($result['success'])) {
             $this->redirectWithMessage(
-                'index.php?controller=adminBooking&action=index',
+                'index.php?controller=adminBooking&action=manage',
                 $result['message'] ?? 'Gagal menyetujui reschedule.',
                 'error'
             );
             return;
         }
 
+        // Kalau di result ada id_booking, bisa arahkan ke detail booking tersebut
+        $idBooking = $result['id_booking'] ?? null;
+        $targetUrl = $idBooking
+            ? 'index.php?controller=adminBooking&action=detail&id=' . (int)$idBooking
+            : 'index.php?controller=adminBooking&action=manage';
+
         $this->redirectWithMessage(
-            'index.php?controller=adminBooking&action=index',
+            $targetUrl,
             'Reschedule berhasil disetujui. Jadwal booking utama telah diperbarui.',
             'success'
         );
     }
 
-    /**
-     * Admin menolak reschedule.
-     */
     public function rejectReschedule()
     {
-        Auth::requireRole(['admin']);
+        Auth::requireRole(['admin', 'super_admin']);
 
         $idReschedule = (int)($this->input('id_reschedule') ?? 0);
         $alasan       = $this->input('alasan_reject') ?? null;
 
         if (!$idReschedule) {
             $this->redirectWithMessage(
-                'index.php?controller=adminBooking&action=index',
+                'index.php?controller=adminBooking&action=manage',
                 'Data reschedule tidak valid.',
                 'error'
             );
@@ -596,15 +720,20 @@ class AdminBookingController extends Controller
 
         if (empty($result['success'])) {
             $this->redirectWithMessage(
-                'index.php?controller=adminBooking&action=index',
+                'index.php?controller=adminBooking&action=manage',
                 $result['message'] ?? 'Gagal menolak reschedule.',
                 'error'
             );
             return;
         }
 
+        $idBooking = $result['id_booking'] ?? null;
+        $targetUrl = $idBooking
+            ? 'index.php?controller=adminBooking&action=detail&id=' . (int)$idBooking
+            : 'index.php?controller=adminBooking&action=manage';
+
         $this->redirectWithMessage(
-            'index.php?controller=adminBooking&action=index',
+            $targetUrl,
             'Reschedule ditolak.',
             'success'
         );

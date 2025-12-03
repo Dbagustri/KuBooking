@@ -16,12 +16,12 @@
         include $sidebarPath;
     }
 
-    // data dari controller
-    $users        = $users ?? [];
-    $currentPage  = $current_page ?? 1;
-    $totalPages   = $total_pages ?? 1;
-    $filter       = $filter ?? '';
-    $search       = $search ?? '';
+    // data dari controller (AdminController::anggota)
+    $users       = $users        ?? [];
+    $currentPage = $current_page ?? 1;
+    $totalPages  = $total_pages  ?? 1;
+    $filter      = $filter       ?? '';
+    $search      = $search       ?? '';
     ?>
 
     <!-- KONTEN -->
@@ -47,18 +47,22 @@
                 <input type="hidden" name="controller" value="admin">
                 <input type="hidden" name="action" value="anggota">
 
-                <!-- FILTER -->
+                <!-- FILTER ROLE -->
                 <select name="filter" class="bg-white border border-gray-300 rounded-full px-4 py-2 text-sm shadow">
-                    <option value="">Filter</option>
-                    <option value="mahasiswa" <?= $filter == 'mahasiswa' ? 'selected' : '' ?>>Mahasiswa</option>
-                    <option value="dosen" <?= $filter == 'dosen' ? 'selected' : '' ?>>Dosen</option>
-                    <option value="tendik" <?= $filter == 'tendik' ? 'selected' : '' ?>>Tendik</option>
-                    <option value="super_admin" <?= $filter == 'super_admin' ? 'selected' : '' ?>>Super Admin</option>
+                    <option value="">Semua Role</option>
+                    <option value="mahasiswa" <?= $filter === 'mahasiswa'   ? 'selected' : '' ?>>Mahasiswa</option>
+                    <option value="dosen" <?= $filter === 'dosen'       ? 'selected' : '' ?>>Dosen</option>
+                    <option value="tendik" <?= $filter === 'tendik'      ? 'selected' : '' ?>>Tendik</option>
+                    <option value="admin" <?= $filter === 'admin'       ? 'selected' : '' ?>>Admin</option>
+                    <option value="super_admin" <?= $filter === 'super_admin' ? 'selected' : '' ?>>Super Admin</option>
                 </select>
 
                 <!-- SEARCH -->
                 <div class="flex flex-1 items-center bg-white rounded-full px-4 py-2 shadow border border-gray-200">
-                    <input type="text" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Cari"
+                    <input type="text"
+                        name="q"
+                        value="<?= htmlspecialchars($search) ?>"
+                        placeholder="Cari nama atau email"
                         class="flex-1 text-sm bg-transparent focus:outline-none">
                 </div>
 
@@ -75,7 +79,7 @@
                         <tr class="bg-[#1e3a5f] text-white text-left text-sm">
                             <th class="px-4 py-3">Nama</th>
                             <th class="px-4 py-3">Email</th>
-                            <th class="px-4 py-3">Jurusan</th>
+                            <th class="px-4 py-3">Jurusan / Unit</th>
                             <th class="px-4 py-3">Screenshot</th>
                             <th class="px-4 py-3">Status</th>
                             <th class="px-4 py-3 text-center">Aksi</th>
@@ -86,47 +90,97 @@
                         <?php if (!empty($users)): ?>
                             <?php foreach ($users as $i => $u): ?>
                                 <?php
-                                $id      = (int)($u['id_account'] ?? 0);
-                                $status  = $u['status_aktif'] ?? 'aktif';
+                                $id         = (int)($u['id_account'] ?? 0);
+                                $status     = $u['status_aktif'] ?? 'aktif';
+                                $jurusan    = $u['jurusan'] ?? ($u['unit_jurusan'] ?? '-');
+                                $badgeClass = $status === 'aktif'
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-red-100 text-red-800';
                                 ?>
                                 <tr class="<?= $i % 2 === 0 ? 'bg-gray-50' : 'bg-gray-100'; ?> text-sm text-gray-800 border-b">
 
                                     <td class="px-4 py-3"><?= htmlspecialchars($u['nama'] ?? '-') ?></td>
                                     <td class="px-4 py-3"><?= htmlspecialchars($u['email'] ?? '-') ?></td>
-                                    <td class="px-4 py-3"><?= htmlspecialchars($u['jurusan'] ?? '-') ?></td>
+                                    <td class="px-4 py-3"><?= htmlspecialchars($jurusan) ?></td>
 
                                     <td class="px-4 py-3 text-blue-600 hover:underline text-sm">
                                         <?php if (!empty($u['screenshot_kubaca'])): ?>
-                                            <a href="<?= htmlspecialchars($u['screenshot_kubaca']) ?>" target="_blank">lihat bukti</a>
+                                            <a href="<?= htmlspecialchars($u['screenshot_kubaca']) ?>" target="_blank">
+                                                lihat bukti
+                                            </a>
                                         <?php else: ?>
                                             <span class="text-gray-400">Tidak ada</span>
                                         <?php endif; ?>
                                     </td>
 
                                     <td class="px-4 py-3">
-                                        <span class="px-3 py-1 rounded-full text-xs font-semibold
-                                            <?= $status == 'aktif' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' ?>">
-                                            <?= ucfirst($status) ?>
+                                        <span class="px-3 py-1 rounded-full text-xs font-semibold <?= $badgeClass ?>">
+                                            <?= htmlspecialchars(ucfirst($status)) ?>
                                         </span>
                                     </td>
 
-                                    <!-- Aksi: Edit / Delete -->
-                                    <td class="px-4 py-3 text-center space-x-2">
-
-                                        <a href="index.php?controller=admin&action=editUser&id=<?= $id ?>"
-                                            class="inline-block px-4 py-1.5 rounded bg-[#1e3a5f] text-white text-xs font-medium hover:bg-[#163052] transition">
-                                            Edit
-                                        </a>
-
-                                        <form action="index.php?controller=admin&action=deleteUser" method="POST" class="inline"
-                                            onsubmit="return confirm('Yakin ingin menghapus user ini?');">
-                                            <input type="hidden" name="id_user" value="<?= $id ?>">
-                                            <button type="submit"
-                                                class="inline-block px-4 py-1.5 rounded bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition">
-                                                Delete
+                                    <!-- Aksi: Edit / Aktif/nonaktif / Delete (menu titik tiga) -->
+                                    <td class="px-4 py-3 text-center">
+                                        <div class="relative inline-block text-left">
+                                            <button type="button"
+                                                onclick="toggleMenu('user-<?= $id ?>')"
+                                                class="inline-flex justify-center w-8 h-8 rounded-full hover:bg-gray-200 text-xl leading-none">
+                                                &#8226;&#8226;&#8226;
                                             </button>
-                                        </form>
 
+                                            <div id="user-<?= $id ?>"
+                                                class="hidden origin-top-right absolute right-0 mt-2 w-44
+                                                        rounded-md shadow-lg bg-white ring-1 ring-black/5
+                                                        z-20 text-left text-sm">
+
+                                                <!-- EDIT -->
+                                                <a href="index.php?controller=admin&action=editUser&id=<?= $id ?>"
+                                                    class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+                                                    Edit profil
+                                                </a>
+                                                <a href="index.php?controller=admin&action=detailUser&id=<?= $u['id_account'] ?>"
+                                                    class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+                                                    Detail
+                                                </a>
+                                                <!-- AKTIF / NONAKTIF -->
+                                                <?php if ($status === 'aktif'): ?>
+                                                    <form action="index.php?controller=admin&action=setUserStatus"
+                                                        method="POST"
+                                                        onsubmit="return confirm('Nonaktifkan user ini? User tidak dapat melakukan booking.');">
+                                                        <input type="hidden" name="id_user" value="<?= $id ?>">
+                                                        <input type="hidden" name="status" value="nonaktif">
+                                                        <button type="submit"
+                                                            class="w-full text-left px-4 py-2 text-red-700 hover:bg-red-50">
+                                                            Nonaktifkan
+                                                        </button>
+                                                    </form>
+                                                <?php else: ?>
+                                                    <form action="index.php?controller=admin&action=setUserStatus"
+                                                        method="POST"
+                                                        onsubmit="return confirm('Aktifkan kembali user ini?');">
+                                                        <input type="hidden" name="id_user" value="<?= $id ?>">
+                                                        <input type="hidden" name="status" value="aktif">
+                                                        <button type="submit"
+                                                            class="w-full text-left px-4 py-2 text-green-700 hover:bg-green-50">
+                                                            Aktifkan
+                                                        </button>
+                                                    </form>
+                                                <?php endif; ?>
+
+                                                <!-- DELETE -->
+                                                <form action="index.php?controller=admin&action=deleteUser"
+                                                    method="POST"
+                                                    onsubmit="return confirm('Yakin ingin menghapus user ini? Tindakan ini tidak dapat dibatalkan.');">
+                                                    <input type="hidden" name="id_user" value="<?= $id ?>">
+                                                    <button type="submit"
+                                                        class="w-full text-left px-4 py-2 border-t
+                                                                   text-red-700 hover:bg-red-50">
+                                                        Hapus
+                                                    </button>
+                                                </form>
+
+                                            </div>
+                                        </div>
                                     </td>
                                 </tr>
 
@@ -148,14 +202,14 @@
 
                     <!-- Prev -->
                     <?php if ($currentPage > 1): ?>
-                        <a href="index.php?controller=admin&action=anggota&page=<?= $currentPage - 1 ?>&filter=<?= $filter ?>&q=<?= urlencode($search) ?>"
+                        <a href="index.php?controller=admin&action=anggota&page=<?= $currentPage - 1 ?>&filter=<?= urlencode($filter) ?>&q=<?= urlencode($search) ?>"
                             class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 text-gray-700">&lt;</a>
                     <?php else: ?>
                         <span class="px-3 py-1 rounded bg-gray-100 text-gray-400 cursor-not-allowed">&lt;</span>
                     <?php endif; ?>
 
                     <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                        <a href="index.php?controller=admin&action=anggota&page=<?= $i ?>&filter=<?= $filter ?>&q=<?= urlencode($search) ?>"
+                        <a href="index.php?controller=admin&action=anggota&page=<?= $i ?>&filter=<?= urlencode($filter) ?>&q=<?= urlencode($search) ?>"
                             class="px-3 py-1 rounded <?= $i == $currentPage ? 'bg-[#1e3a5f] text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700' ?>">
                             <?= $i ?>
                         </a>
@@ -163,7 +217,7 @@
 
                     <!-- Next -->
                     <?php if ($currentPage < $totalPages): ?>
-                        <a href="index.php?controller=admin&action=anggota&page=<?= $currentPage + 1 ?>&filter=<?= $filter ?>&q=<?= urlencode($search) ?>"
+                        <a href="index.php?controller=admin&action=anggota&page=<?= $currentPage + 1 ?>&filter=<?= urlencode($filter) ?>&q=<?= urlencode($search) ?>"
                             class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 text-gray-700">&gt;</a>
                     <?php else: ?>
                         <span class="px-3 py-1 rounded bg-gray-100 text-gray-400 cursor-not-allowed">&gt;</span>
@@ -174,6 +228,24 @@
 
         </div>
     </div>
+
+    <script>
+        function toggleMenu(id) {
+            const menu = document.getElementById(id);
+            if (!menu) return;
+            menu.classList.toggle('hidden');
+        }
+
+        // Tutup dropdown kalau klik di luar
+        document.addEventListener('click', function(e) {
+            document.querySelectorAll("[id^='user-']").forEach(menu => {
+                const btn = menu.previousElementSibling;
+                if (!menu.contains(e.target) && !btn.contains(e.target)) {
+                    menu.classList.add('hidden');
+                }
+            });
+        });
+    </script>
 
 </body>
 

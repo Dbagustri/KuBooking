@@ -178,6 +178,7 @@
                                     </td>
 
                                     <!-- AKSI: menu titik tiga -->
+                                    <!-- AKSI: menu titik tiga -->
                                     <td class="py-3 px-3 text-center">
                                         <div class="relative inline-block text-left">
                                             <button
@@ -188,8 +189,22 @@
                                                 ⋮
                                             </button>
 
+                                            <?php
+                                            // Hitung sekali di sini untuk menu aksi
+                                            $statusLower = strtolower($h['status'] ?? 'pending');
+                                            $now         = new DateTime();
+                                            $startTime   = new DateTime($h['start_time']);
+
+                                            // Hanya bisa reschedule/cancel kalau masih pending/approved dan belum mulai
+                                            $canReschedule = in_array($statusLower, ['pending', 'approved'], true)
+                                                && $startTime > $now;
+
+                                            $canCancel = in_array($statusLower, ['pending', 'approved'], true)
+                                                && $startTime > $now;
+                                            ?>
+
                                             <div
-                                                class="action-menu hidden origin-top-right absolute right-0 mt-2 w-36 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
+                                                class="action-menu hidden origin-top-right absolute right-0 mt-2 w-40 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
                                                 <div class="py-1 text-xs text-slate-700">
                                                     <!-- Detail -->
                                                     <a
@@ -198,14 +213,7 @@
                                                         Detail
                                                     </a>
 
-                                                    <!-- Reschedule (endpoint bisa kamu sesuaikan nanti) -->
-                                                    <?php
-                                                    $statusLower = strtolower($h['status'] ?? 'pending');
-                                                    $now = new DateTime();
-                                                    $startTime = new DateTime($h['start_time']);
-                                                    $canReschedule = in_array($statusLower, ['pending', 'approved'], true)
-                                                        && $startTime > $now;
-                                                    ?>
+                                                    <!-- Reschedule -->
                                                     <?php if ($canReschedule): ?>
                                                         <a
                                                             href="index.php?controller=userReschedule&action=reschedule&id_booking=<?= (int)$h['id_bookings'] ?>"
@@ -214,21 +222,20 @@
                                                         </a>
                                                     <?php endif; ?>
 
-
-
-                                                    <!-- Batalkan (nanti arahkan ke action cancel booking kalau sudah ada) -->
-                                                    <button
-                                                        type="button"
-                                                        class="block w-full text-left px-4 py-2 text-xs hover:bg-slate-100 cancel-booking-btn"
-                                                        data-id-booking="<?= (int)$h['id_bookings'] ?>">
-                                                        Batalkan
-                                                    </button>
-
-
+                                                    <!-- Batalkan -->
+                                                    <?php if ($canCancel): ?>
+                                                        <button
+                                                            type="button"
+                                                            class="block w-full text-left px-3 py-1 hover:bg-slate-50 cancel-booking-btn"
+                                                            data-id-booking="<?= (int)$h['id_bookings'] ?>">
+                                                            Batalkan
+                                                        </button>
+                                                    <?php endif; ?>
                                                 </div>
                                             </div>
                                         </div>
                                     </td>
+
                                 </tr>
                             <?php endforeach; ?>
                         <?php else: ?>

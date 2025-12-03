@@ -1,14 +1,16 @@
 <?php
 
-/** @var array $room */
-/** @var array $slots */
-/** @var array $slotStatus */
-/** @var array $fasilitas */
-/** @var bool $buttonDisabled */
+/** @var array       $room */
+/** @var array       $slots */
+/** @var array       $slotStatus */
+/** @var array       $fasilitas */
+/** @var bool        $buttonDisabled */
+/** @var string|null $jamOperasionalText */
 
-$buttonDisabled = $buttonDisabled ?? false;
+$buttonDisabled     = $buttonDisabled ?? false;
+$jamOperasionalText = $jamOperasionalText ?? '';
+
 ?>
-
 <!DOCTYPE html>
 <html lang="id">
 
@@ -27,12 +29,13 @@ $buttonDisabled = $buttonDisabled ?? false;
     include $navbarPath;
   }
   ?>
+
   <div class="min-h-screen px-8 py-6">
 
     <!-- Back -->
     <div class="mb-4">
       <a href="index.php?controller=user&action=home" class="inline-flex items-center text-gray-600 hover:text-gray-800">
-        <i class="fa-solid fa-arrow-left"></i>
+        <i class="fa-solid fa-arrow-left mr-2"></i>
         <span>Kembali</span>
       </a>
     </div>
@@ -45,30 +48,27 @@ $buttonDisabled = $buttonDisabled ?? false;
         <!-- Card gambar -->
         <div class="bg-white rounded-3xl shadow-md overflow-hidden">
           <?php
-          // Kalau ada foto di DB -> pakai itu
-          // Kalau kosong -> pakai img/default-room.jpg
           $fotoRuangan = !empty($room['foto_ruangan'])
             ? $room['foto_ruangan']
             : 'img/default-room.jpg';
           ?>
 
-          <div class="bg-white rounded-3xl shadow-md overflow-hidden">
-            <img src="<?= htmlspecialchars($fotoRuangan) ?>"
-              alt="Ruangan <?= htmlspecialchars($room['nama_ruangan']); ?>"
-              class="w-full h-72 object-cover">
+          <img src="<?= htmlspecialchars($fotoRuangan) ?>"
+            alt="Ruangan <?= htmlspecialchars($room['nama_ruangan']); ?>"
+            class="w-full h-72 object-cover">
 
-            <div class="p-6">
-              <h1 class="text-2xl font-semibold text-gray-900 mb-1">
-                <?= htmlspecialchars($room['nama_ruangan']); ?>
-              </h1>
-              <p class="text-gray-600 mb-3">
-                <?= htmlspecialchars($room['deskripsi'] ?? 'Ruang diskusi di perpustakaan utama'); ?>
-              </p>
+          <div class="p-6">
+            <h1 class="text-2xl font-semibold text-gray-900 mb-1">
+              <?= htmlspecialchars($room['nama_ruangan']); ?>
+            </h1>
+            <p class="text-gray-600 mb-3">
+              <?= htmlspecialchars($room['deskripsi'] ?? 'Ruang diskusi di perpustakaan utama'); ?>
+            </p>
 
-              <div class="flex items-center space-x-1 text-yellow-400 text-xl">
-                <span>★</span><span>★</span><span>★</span><span>★</span>
-                <span class="text-gray-300">★</span>
-              </div>
+            <!-- dummy rating -->
+            <div class="flex items-center space-x-1 text-yellow-400 text-xl">
+              <span>★</span><span>★</span><span>★</span><span>★</span>
+              <span class="text-gray-300">★</span>
             </div>
           </div>
         </div>
@@ -102,7 +102,11 @@ $buttonDisabled = $buttonDisabled ?? false;
             <div>
               <h3 class="font-semibold mb-1">Jam Operasional</h3>
               <p class="text-gray-700 whitespace-pre-line">
-                <?= htmlspecialchars($jamOperasionalText); ?>
+                <?php if ($jamOperasionalText !== ''): ?>
+                  <?= htmlspecialchars($jamOperasionalText); ?>
+                <?php else: ?>
+                  Belum ada jadwal operasional yang terdaftar.
+                <?php endif; ?>
               </p>
             </div>
             <div>
@@ -207,7 +211,7 @@ $buttonDisabled = $buttonDisabled ?? false;
           <?php if ($buttonDisabled): ?>
             <span
               class="ml-4 px-5 py-2.5 rounded-xl bg-gray-300 text-gray-500 text-sm font-medium
-             cursor-not-allowed select-none">
+                     cursor-not-allowed select-none">
               Pesan
             </span>
           <?php else: ?>
@@ -218,10 +222,10 @@ $buttonDisabled = $buttonDisabled ?? false;
           <?php endif; ?>
         </div>
 
-
       </div>
     </div>
   </div>
+
   <?php
   $footerPath = __DIR__ . '/../layout/footer.php';
   if (file_exists($footerPath)) {

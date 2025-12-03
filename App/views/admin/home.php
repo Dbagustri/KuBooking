@@ -193,9 +193,26 @@
                     </span>
                   </td>
                   <td class="px-4 py-3 space-x-2">
-                    <a href="index.php?controller=admin&action=approveUser&id=<?= $u['id_registrasi'] ?>" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs transition">Setujui</a>
-                    <a href="index.php?controller=admin&action=rejectUser&id=<?= $u['id_registrasi'] ?>" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition" onclick="return confirm('Yakin ingin menolak?');">Tolak</a>
+                    <!-- Setujui -->
+                    <form action="index.php?controller=admin&action=approveUser" method="POST" class="inline">
+                      <input type="hidden" name="id_registrasi" value="<?= (int)($u['id_registrasi'] ?? 0) ?>">
+                      <button type="submit"
+                        class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs transition">
+                        Setujui
+                      </button>
+                    </form>
+
+                    <!-- Tolak -->
+                    <form action="index.php?controller=admin&action=rejectUser" method="POST" class="inline"
+                      onsubmit="return confirm('Yakin ingin menolak?');">
+                      <input type="hidden" name="id_registrasi" value="<?= (int)($u['id_registrasi'] ?? 0) ?>">
+                      <button type="submit"
+                        class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition">
+                        Tolak
+                      </button>
+                    </form>
                   </td>
+
                 </tr>
               <?php endforeach; ?>
             <?php else: ?>

@@ -6,9 +6,6 @@ use PDO;
 
 class BookingUser extends BookingBase
 {
-    /**
-     * Riwayat booking user (hanya booking yang sudah disubmit).
-     */
     public function getHistoryByUser(int $idUser, int $limit = 10, int $offset = 0): array
     {
         $sql = "SELECT 

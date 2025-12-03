@@ -150,8 +150,6 @@ class AuthController extends Controller
             return;
         }
 
-        // Validasi Password Match
-        // Validasi Password Match
         if ($password !== $password2) {
             $this->view('auth/register', [
                 'error' => 'Konfirmasi password tidak sama',
@@ -160,7 +158,6 @@ class AuthController extends Controller
             return;
         }
 
-        // Validasi kekuatan password: minimal 8 karakter, ada huruf & angka
         if (!preg_match('/^(?=.*[A-Za-z])(?=.*\d).{8,}$/', $password)) {
             $this->view('auth/register', [
                 'error' => 'Password minimal 8 karakter dan harus mengandung huruf dan angka.',
@@ -417,7 +414,13 @@ class AuthController extends Controller
             ]);
             return;
         }
-
+        if (!preg_match('/^(?=.*[A-Za-z])(?=.*\d).{8,}$/', $passwordBaru)) {
+            $this->view('auth/gantipassword', [
+                'error'   => 'Password baru minimal 8 karakter dan harus mengandung huruf dan angka.',
+                'success' => null,
+            ]);
+            return;
+        }
         // Kalau mau, bisa pakai flash message
         $this->redirectWithMessage(
             'index.php?controller=userBooking&action=home',

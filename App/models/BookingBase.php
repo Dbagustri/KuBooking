@@ -13,10 +13,6 @@ class BookingBase extends Model
     {
         parent::__construct();
     }
-
-    /**
-     * Ambil booking + info ruangan (nama, kapasitas_min, kapasitas_max)
-     */
     public function findWithRoom(int $idBooking): ?array
     {
         $sql = "SELECT 
@@ -36,9 +32,6 @@ class BookingBase extends Model
         return $row ?: null;
     }
 
-    /**
-     * Hapus booking (cascading ke Booking_member & Booking_status lewat FK)
-     */
     public function deleteBooking(int $idBooking): bool
     {
         $sql  = "DELETE FROM " . self::$table . " WHERE id_bookings = :id";
@@ -46,9 +39,6 @@ class BookingBase extends Model
         return $stmt->execute(['id' => $idBooking]);
     }
 
-    /**
-     * Tambah entry status baru ke Booking_status
-     */
     public function addStatus(
         int $idBooking,
         string $status,
@@ -71,9 +61,6 @@ class BookingBase extends Model
         ]);
     }
 
-    /**
-     * Tambah anggota ke Booking_member + update jumlah_anggota
-     */
     public function addMember(int $idBooking, int $idUser): void
     {
         // insert member
@@ -93,9 +80,6 @@ class BookingBase extends Model
         $stmt2->execute(['booking' => $idBooking]);
     }
 
-    /**
-     * Hapus anggota dari Booking_member + turunkan jumlah_anggota (minimal 0)
-     */
     public function removeMember(int $idBooking, int $idUser): void
     {
         $sql = "DELETE FROM Booking_member
@@ -113,26 +97,39 @@ class BookingBase extends Model
         $stmt2->execute(['booking' => $idBooking]);
     }
 
-    /**
-     * Ambil anggota booking (id_user + nama)
-     */
     public function getMembers(int $idBooking): array
     {
         $sql = "SELECT 
-                    bm.id_user, 
-                    a.nama
-                FROM Booking_member bm
-                JOIN Account a ON a.id_account = bm.id_user
-                WHERE bm.id_bookings = :booking
-                ORDER BY a.nama ASC";
+                bm.id_user, 
+                a.nama,
+                a.nim_nip
+            FROM Booking_member bm
+            JOIN Account a ON a.id_account = bm.id_user
+            WHERE bm.id_bookings = :booking
+            ORDER BY a.nama ASC";
 
         $stmt = self::$db->prepare($sql);
         $stmt->execute(['booking' => $idBooking]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-
+    protected function buildActiveBookingWhereFragment(): string
+    {
+        return "
+            (
+                b.submitted = 1
+                OR b.group_expire_at IS NULL
+                OR b.group_expire_at >= NOW()
+            )
+            AND (
+                bs_latest.status IS NULL
+                OR bs_latest.status NOT IN ('rejected', 'cancelled')
+            )
+        ";
+    }
     public function isBentrok(int $idRuangan, string $start, string $end): bool
     {
+        $activeFragment = $this->buildActiveBookingWhereFragment();
+
         $sql = "
             SELECT b.id_bookings
             FROM " . self::$table . " b
@@ -145,14 +142,7 @@ class BookingBase extends Model
             WHERE 
                 b.id_ruangan = :room
                 AND (b.start_time < :end AND b.end_time > :start)
-                AND (
-                    b.submitted = 1
-                    OR (b.group_expire_at IS NOT NULL AND b.group_expire_at >= NOW())
-                )
-                AND (
-                    bs_latest.status IS NULL
-                    OR bs_latest.status NOT IN ('rejected', 'cancelled')
-                )
+                AND {$activeFragment}
             LIMIT 1
         ";
 
@@ -166,17 +156,14 @@ class BookingBase extends Model
         return (bool)$stmt->fetch(PDO::FETCH_ASSOC);
     }
 
-    /**
-     * Ambil slot 30 menit yang sudah terpakai untuk ruangan & tanggal tertentu
-     * return: array ['08:00','08:30', ...]
-     */
     public function getDisabledSlotsForRoomDate(int $idRuangan, string $tanggal): array
     {
+        $activeFragment = $this->buildActiveBookingWhereFragment();
+
         $sql = "
             SELECT 
                 b.start_time, 
-                b.end_time,
-                bs_latest.status AS last_status
+                b.end_time
             FROM " . self::$table . " b
             LEFT JOIN Booking_status bs_latest
                 ON bs_latest.id_status = (
@@ -187,14 +174,7 @@ class BookingBase extends Model
             WHERE 
                 b.id_ruangan = :room
                 AND b.tanggal = :tanggal
-                AND (
-                    b.submitted = 1
-                    OR (b.group_expire_at IS NOT NULL AND b.group_expire_at >= NOW())
-                )
-                AND (
-                    bs_latest.status IS NULL
-                    OR bs_latest.status NOT IN ('rejected', 'cancelled')
-                )
+                AND {$activeFragment}
         ";
 
         $stmt = self::$db->prepare($sql);
@@ -221,9 +201,6 @@ class BookingBase extends Model
         return array_values(array_unique($disabled));
     }
 
-    /**
-     * Ambil status terakhir suatu booking
-     */
     public function getLastStatus(int $idBooking): ?string
     {
         $sql = "SELECT status
@@ -239,12 +216,10 @@ class BookingBase extends Model
         return $row['status'] ?? null;
     }
 
-    /**
-     * Cek bentrok jadwal di ruangan tertentu
-     * namun MENGABAIKAN 1 booking tertentu (mis. saat reschedule).
-     */
     public function isBentrokExcept(int $idRuangan, string $start, string $end, int $excludeBookingId): bool
     {
+        $activeFragment = $this->buildActiveBookingWhereFragment();
+
         $sql = "
             SELECT b.id_bookings
             FROM " . self::$table . " b
@@ -258,14 +233,7 @@ class BookingBase extends Model
                 b.id_ruangan = :room
                 AND b.id_bookings <> :exclude_id
                 AND (b.start_time < :end AND b.end_time > :start)
-                AND (
-                    b.submitted = 1
-                    OR (b.group_expire_at IS NOT NULL AND b.group_expire_at >= NOW())
-                )
-                AND (
-                    bs_latest.status IS NULL
-                    OR bs_latest.status NOT IN ('rejected', 'cancelled')
-                )
+                AND {$activeFragment}
             LIMIT 1
         ";
 
@@ -280,17 +248,15 @@ class BookingBase extends Model
         return (bool)$stmt->fetch(PDO::FETCH_ASSOC);
     }
 
-    /**
-     * Ambil slot 30 menit yang sudah terpakai untuk ruangan & tanggal tertentu,
-     * mengabaikan 1 booking (dipakai di halaman reschedule).
-     */
+
     public function getDisabledSlotsForRoomDateExcept(int $idRuangan, string $tanggal, int $excludeBookingId): array
     {
+        $activeFragment = $this->buildActiveBookingWhereFragment();
+
         $sql = "
             SELECT 
                 b.start_time, 
-                b.end_time,
-                bs_latest.status AS last_status
+                b.end_time
             FROM " . self::$table . " b
             LEFT JOIN Booking_status bs_latest
                 ON bs_latest.id_status = (
@@ -302,14 +268,7 @@ class BookingBase extends Model
                 b.id_ruangan = :room
                 AND b.tanggal = :tanggal
                 AND b.id_bookings <> :exclude_id
-                AND (
-                    b.submitted = 1
-                    OR (b.group_expire_at IS NOT NULL AND b.group_expire_at >= NOW())
-                )
-                AND (
-                    bs_latest.status IS NULL
-                    OR bs_latest.status NOT IN ('rejected', 'cancelled')
-                )
+                AND {$activeFragment}
         ";
 
         $stmt = self::$db->prepare($sql);

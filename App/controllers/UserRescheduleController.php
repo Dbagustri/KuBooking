@@ -369,7 +369,7 @@ class UserRescheduleController extends Controller
         // hanya PJ
         if ((int)$booking['id_pj'] !== (int)$account['id_account']) {
             $this->redirectWithMessage(
-                'index.php>controller=userBooking&action=riwayat',
+                'index.php?controller=userBooking&action=riwayat',
                 'Hanya PJ yang dapat mengajukan reschedule.',
                 'error'
             );

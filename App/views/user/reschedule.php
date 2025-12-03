@@ -6,7 +6,6 @@ use App\Core\Auth;
 /** @var array $members */
 /** @var array|null $reschedule */
 /** @var array $disabledSlots */
-
 $today         = date('Y-m-d');
 $booking       = $booking ?? [];
 $reschedule    = $reschedule ?? null;
@@ -24,22 +23,23 @@ $oldEnd     = $booking['end_time'] ?? ($today . ' 09:00:00');
 
 $oldStartLabel = date('H:i', strtotime($oldStart));
 $oldEndLabel   = date('H:i', strtotime($oldEnd));
+$selectedDate = $_GET['tanggal'] ?? null;
 
-// data jadwal baru (kalau sudah ada draft reschedule)
 if ($reschedule) {
-    $selectedDate = $reschedule['new_tanggal'];
-    $newStartTime = $reschedule['new_start_time'];
-    $newEndTime   = $reschedule['new_end_time'];
+    if (!$selectedDate) {
+        $selectedDate = $reschedule['new_tanggal'];
+    }
+    $newStartTime = $reschedule['new_start_time'] ?? null;
+    $newEndTime   = $reschedule['new_end_time'] ?? null;
     $joinUntil    = $reschedule['join_reschedule_until'] ?? null;
 } else {
-    // default: pakai tanggal booking lama sebagai awal
-    $selectedDate = $oldTanggal;
+    if (!$selectedDate) {
+        $selectedDate = $oldTanggal;
+    }
     $newStartTime = null;
     $newEndTime   = null;
     $joinUntil    = null;
 }
-
-// hitung jam mulai & durasi dari jadwal baru (kalau ada)
 $selectedJamMulai = null;
 $selectedDurasi   = null;
 
@@ -63,31 +63,11 @@ $isPJ        = $booking
     && ((int)$booking['id_pj'] === (int)$userSession['id_account']);
 
 // sederhanakan akses ke id_reschedule & submitted
-$rescheduleId           = $reschedule['id_reschedule'] ?? null;
-$isRescheduleSubmitted  = (int)($reschedule['submitted'] ?? 0) === 1;
+$rescheduleId          = $reschedule['id_reschedule'] ?? null;
+$isRescheduleSubmitted = (int)($reschedule['submitted'] ?? 0) === 1;
 
-// slot 30 menit untuk visual
+// slot 1 jam untuk visual
 $timeSlots = [
-    '08:00',
-    '08:30',
-    '09:00',
-    '09:30',
-    '10:00',
-    '10:30',
-    '11:00',
-    '11:30',
-    '12:00',
-    '12:30',
-    '13:00',
-    '13:30',
-    '14:00',
-    '14:30',
-    '15:00',
-    '15:30',
-];
-
-// pilihan jam mulai tiap jam
-$startOptions = [
     '08:00',
     '09:00',
     '10:00',
@@ -99,8 +79,40 @@ $startOptions = [
     '16:00',
 ];
 
+// pilihan jam mulai tiap jam
+$startOptions = $timeSlots;
+
+// flag hari
 $isTodaySelected = ($selectedDate === $today);
-$nowMinutes      = (int)date('H') * 60 + (int)date('i'); // menit sejak 00:00
+$isPastDay       = ($selectedDate < $today);
+
+// menit sekarang (pakai timezone server)
+$nowMinutes = (int)date('H') * 60 + (int)date('i'); // menit sejak 00:00
+
+// jam operasional & istirahat berdasar hari (PHP)
+$selectedTs = strtotime($selectedDate);
+$dayOfWeek  = (int)date('N', $selectedTs); // 1 = Senin ... 5 = Jumat
+$isFriday   = ($dayOfWeek === 5);
+
+if ($isFriday) {
+    // Jumat: 08.00–16.50 (dibulatkan ke 17.00), istirahat 11.00–13.00
+    $openMinutes  = 8 * 60;
+    $closeMinutes = 17 * 60; // 17.00
+    $breakStart   = 11 * 60;
+    $breakEnd     = 13 * 60;
+} else {
+    // Sen–Kam (dan selain Jumat): 08.00–15.50 (dibulatkan ke 16.00), istirahat 12.00–13.00
+    $openMinutes  = 8 * 60;
+    $closeMinutes = 16 * 60; // 16.00
+    $breakStart   = 12 * 60;
+    $breakEnd     = 13 * 60;
+}
+
+// cek apakah batas join reschedule sudah lewat
+$joinExpired = false;
+if (!empty($joinUntil)) {
+    $joinExpired = (strtotime($joinUntil) <= time());
+}
 
 ?>
 <!DOCTYPE html>
@@ -146,7 +158,7 @@ $nowMinutes      = (int)date('H') * 60 + (int)date('i'); // menit sejak 00:00
                     <?php
                     $imgPath = !empty($booking['foto_ruangan'])
                         ? htmlspecialchars($booking['foto_ruangan'])
-                        : 'rapat.png';
+                        : 'img/rapat.png';
                     ?>
                     <div class="h-48 bg-cover bg-center"
                         style="background-image: url('<?= $imgPath ?>');"></div>
@@ -214,16 +226,22 @@ $nowMinutes      = (int)date('H') * 60 + (int)date('i'); // menit sejak 00:00
                             <?php endif; ?>
 
                             <?php if ($joinUntil && $reschedule && !$isRescheduleSubmitted): ?>
-                                <p class="text-xs text-slate-500">
-                                    Batas anggota lain untuk bergabung ke jadwal baru sampai:
-                                    <span class="font-semibold text-slate-900" id="join-deadline">
-                                        <?= date('d M Y H:i', strtotime($joinUntil)) ?>
-                                    </span>
-                                </p>
-                                <p class="text-xs text-slate-500">
-                                    Waktu tersisa:
-                                    <span class="font-semibold text-slate-900" id="countdown"></span>
-                                </p>
+                                <?php if (!$joinExpired): ?>
+                                    <p class="text-xs text-slate-500">
+                                        Batas anggota lain untuk bergabung ke jadwal baru sampai:
+                                        <span class="font-semibold text-slate-900" id="join-deadline">
+                                            <?= date('d M Y H:i', strtotime($joinUntil)) ?>
+                                        </span>
+                                    </p>
+                                    <p class="text-xs text-slate-500">
+                                        Waktu tersisa:
+                                        <span class="font-semibold text-slate-900" id="countdown"></span>
+                                    </p>
+                                <?php else: ?>
+                                    <p class="text-xs text-red-600 font-medium">
+                                        Waktu anggota lain untuk bergabung ke jadwal reschedule ini sudah habis.
+                                    </p>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -295,162 +313,188 @@ $nowMinutes      = (int)date('H') * 60 + (int)date('i'); // menit sejak 00:00
                     Reschedule Jadwal
                 </h2>
                 <p class="text-xs text-slate-500 mb-3">
-                    Pilih tanggal & jam baru, kemudian simpan sebagai draft.
+                    Pilih tanggal &amp; jam baru, kemudian simpan sebagai draft.
                     Setelah anggota jadwal baru sudah sesuai, klik
                     <span class="font-semibold">"Ajukan Reschedule"</span>
                     untuk mengirim permintaan ke admin.
                 </p>
 
-                <!-- FORM EDIT JADWAL (DRAFT) -->
-                <form action="index.php?controller=userReschedule&action=submitReschedule"
-                    method="POST"
-                    class="space-y-5">
-                    <input type="hidden" name="id_booking" value="<?= $idBooking ?>">
-                    <input type="hidden" name="id_ruangan" value="<?= $idRuangan ?>">
+                <?php if (!$isPJ): ?>
+                    <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-600">
+                        Jadwal reschedule hanya bisa diubah oleh
+                        <span class="font-semibold">Penanggung Jawab (PJ)</span> kelompok.
+                        Kamu hanya dapat melihat informasi jadwal dan status reschedule.
+                    </div>
+                <?php else: ?>
 
-                    <div class="grid gap-4 sm:grid-cols-2">
-                        <div class="sm:col-span-2">
-                            <label class="block text-sm font-medium text-slate-700 mb-1">
-                                Tanggal Baru
-                            </label>
-                            <input
-                                type="date"
-                                name="tanggal_baru"
-                                id="tanggal_baru"
-                                value="<?= htmlspecialchars($selectedDate) ?>"
-                                min="<?= $today ?>"
-                                class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm
-                                       focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-300"
-                                required />
+                    <!-- FORM EDIT JADWAL (DRAFT) – hanya PJ -->
+                    <form action="index.php?controller=userReschedule&action=submitReschedule"
+                        method="POST"
+                        class="space-y-5">
+                        <input type="hidden" name="id_booking" value="<?= $idBooking ?>">
+                        <input type="hidden" name="id_ruangan" value="<?= $idRuangan ?>">
+
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div class="sm:col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">
+                                    Tanggal Baru
+                                </label>
+                                <input
+                                    type="date"
+                                    name="tanggal_baru"
+                                    id="tanggal_baru"
+                                    value="<?= htmlspecialchars($selectedDate) ?>"
+                                    min="<?= $today ?>"
+                                    class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm
+                                           focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-300"
+                                    required />
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">
+                                    Jam Mulai Baru
+                                </label>
+                                <select
+                                    name="jam_mulai_baru"
+                                    id="jam_mulai_baru"
+                                    class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm
+                                           focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-300"
+                                    required>
+                                    <option value="">Pilih jam</option>
+                                    <?php foreach ($startOptions as $opt):
+                                        $optMinutes = (int)substr($opt, 0, 2) * 60 + (int)substr($opt, 3, 2);
+
+                                        // flag untuk hari
+                                        $optPastDay   = $isPastDay; // kalau tanggal sudah lewat, semua jam nonaktif
+                                        $optPastToday = $isTodaySelected && ($optMinutes <= $nowMinutes);
+
+                                        // di luar jam buka / tutup
+                                        $outsideOp = ($optMinutes < $openMinutes || $optMinutes >= $closeMinutes);
+
+                                        // jam istirahat
+                                        $insideBreak = ($optMinutes >= $breakStart && $optMinutes < $breakEnd);
+
+                                        // sudah bentrok
+                                        $isBooked = in_array($opt, $disabledSlots, true);
+
+                                        $disabled = $optPastDay || $optPastToday || $outsideOp || $insideBreak || $isBooked;
+                                        $selected = ($selectedJamMulai === $opt) ? 'selected' : '';
+                                    ?>
+                                        <option
+                                            value="<?= $opt ?>"
+                                            <?= $disabled ? 'disabled' : '' ?>
+                                            <?= $selected ?>>
+                                            <?= str_replace(':', '.', $opt) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">
+                                    Durasi Baru
+                                </label>
+                                <select
+                                    name="durasi_baru"
+                                    id="durasi_baru"
+                                    class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm
+                                           focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-300"
+                                    required>
+                                    <option value="">Pilih durasi</option>
+                                    <option value="1" <?= $selectedDurasi === 1 ? 'selected' : '' ?>>1 jam</option>
+                                    <option value="2" <?= $selectedDurasi === 2 ? 'selected' : '' ?>>2 jam</option>
+                                    <option value="3" <?= $selectedDurasi === 3 ? 'selected' : '' ?>>3 jam</option>
+                                </select>
+                            </div>
                         </div>
 
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">
-                                Jam Mulai Baru
-                            </label>
-                            <select
-                                name="jam_mulai_baru"
-                                id="jam_mulai_baru"
-                                class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm
-                                       focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-300"
-                                required>
-                                <option value="">Pilih jam</option>
-                                <?php foreach ($startOptions as $opt):
-                                    $optMinutes = (int)substr($opt, 0, 2) * 60 + (int)substr($opt, 3, 2);
-                                    $optPast    = $isTodaySelected && ($optMinutes <= $nowMinutes);
-                                    $selected   = ($selectedJamMulai === $opt) ? 'selected' : '';
+                        <!-- Jam tersedia -->
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <label class="block text-sm font-medium text-slate-700">
+                                    Jam Tersedia (Tanggal Dipilih)
+                                </label>
+                                <span class="text-xs text-slate-400">
+                                    Hijau: tersedia, Merah: penuh / istirahat / di luar jam buka / sudah lewat
+                                </span>
+                            </div>
+
+                            <div class="grid grid-cols-3 sm:grid-cols-4 gap-2 text-xs sm:text-sm">
+                                <?php foreach ($timeSlots as $slot):
+                                    $label       = str_replace(':', '.', substr($slot, 0, 5));
+                                    $slotMinutes = (int)substr($slot, 0, 2) * 60 + (int)substr($slot, 3, 2);
+
+                                    $isDisabledByBooking = in_array($slot, $disabledSlots, true);
+
+                                    $isPastDaySlot   = $isPastDay;
+                                    $isPastTodaySlot = $isTodaySelected && ($slotMinutes <= $nowMinutes);
+
+                                    $outsideOp   = ($slotMinutes < $openMinutes || $slotMinutes >= $closeMinutes);
+                                    $insideBreak = ($slotMinutes >= $breakStart && $slotMinutes < $breakEnd);
+
+                                    $isDisabled = $isDisabledByBooking || $isPastDaySlot || $isPastTodaySlot || $outsideOp || $insideBreak;
                                 ?>
-                                    <option
-                                        value="<?= $opt ?>"
-                                        <?= $optPast ? 'disabled' : '' ?>
-                                        <?= $selected ?>>
-                                        <?= str_replace(':', '.', $opt) ?>
-                                    </option>
+                                    <button
+                                        type="button"
+                                        data-jam="<?= $slot ?>"
+                                        <?= $isDisabled ? 'data-disabled="1"' : '' ?>
+                                        class="slot-btn rounded-full px-3 py-1 text-center
+                                               <?= $isDisabled
+                                                    ? 'border border-red-200 bg-red-50 text-red-600 cursor-not-allowed'
+                                                    : 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' ?>">
+                                        <?= $label ?>
+                                    </button>
                                 <?php endforeach; ?>
-                            </select>
+                            </div>
                         </div>
 
-                        <div>
+                        <!-- Ringkasan waktu -->
+                        <div class="space-y-1">
+                            <p class="text-sm font-medium text-slate-700">
+                                Waktu Reschedule
+                            </p>
+                            <?php
+                            $displayWaktu = '-';
+                            if ($selectedJamMulai && $selectedDurasi) {
+                                $tmpStart = strtotime($selectedJamMulai);
+                                $tmpEnd   = strtotime($selectedJamMulai . " + {$selectedDurasi} hour");
+                                $displayWaktu =
+                                    date('H.i', $tmpStart) . ' – ' . date('H.i', $tmpEnd);
+                            }
+                            ?>
+                            <div
+                                class="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm">
+                                <span class="text-slate-500">Terpilih</span>
+                                <span class="font-semibold text-slate-900" id="waktu-reschedule-text">
+                                    <?= $displayWaktu ?>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Alasan Reschedule -->
+                        <div class="space-y-1">
                             <label class="block text-sm font-medium text-slate-700 mb-1">
-                                Durasi Baru
+                                Alasan Reschedule
                             </label>
-                            <select
-                                name="durasi_baru"
-                                id="durasi_baru"
+                            <textarea
+                                name="alasan"
+                                rows="3"
                                 class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm
                                        focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-300"
-                                required>
-                                <option value="">Pilih durasi</option>
-                                <option value="1" <?= $selectedDurasi === 1 ? 'selected' : '' ?>>1 jam</option>
-                                <option value="2" <?= $selectedDurasi === 2 ? 'selected' : '' ?>>2 jam</option>
-                                <option value="3" <?= $selectedDurasi === 3 ? 'selected' : '' ?>>3 jam</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Jam tersedia -->
-                    <div class="space-y-2">
-                        <div class="flex items-center justify-between">
-                            <label class="block text-sm font-medium text-slate-700">
-                                Jam Tersedia (Tanggal Dipilih)
-                            </label>
-                            <span class="text-xs text-slate-400">
-                                Hijau: tersedia, Merah: penuh / sudah lewat
-                            </span>
+                                placeholder="Contoh: Jadwal bentrok dengan ujian, menyesuaikan ketersediaan anggota, dsb."><?= htmlspecialchars($reschedule['alasan'] ?? '') ?></textarea>
                         </div>
 
-                        <div class="grid grid-cols-4 gap-2 text-xs sm:text-sm">
-                            <?php foreach ($timeSlots as $slot):
-                                $label = str_replace(':', '.', substr($slot, 0, 5));
-
-                                $isDisabledByBooking = in_array($slot, $disabledSlots, true);
-                                $slotMinutes         = (int)substr($slot, 0, 2) * 60 + (int)substr($slot, 3, 2);
-                                $isPast              = $isTodaySelected && ($slotMinutes <= $nowMinutes);
-
-                                $isDisabled = $isDisabledByBooking || $isPast;
-                            ?>
-                                <button
-                                    type="button"
-                                    data-jam="<?= $slot ?>"
-                                    <?= $isDisabled ? 'data-disabled="1"' : '' ?>
-                                    class="slot-btn rounded-full px-3 py-1 text-center
-                                           <?= $isDisabled
-                                                ? 'border border-red-200 bg-red-50 text-red-600 cursor-not-allowed'
-                                                : 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' ?>">
-                                    <?= $label ?>
-                                </button>
-                            <?php endforeach; ?>
+                        <div class="pt-2">
+                            <button
+                                type="submit"
+                                class="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm
+                                       hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1">
+                                Edit Kelompok (Simpan Jadwal Baru)
+                            </button>
                         </div>
-                    </div>
+                    </form>
 
-                    <!-- Ringkasan waktu -->
-                    <div class="space-y-1">
-                        <p class="text-sm font-medium text-slate-700">
-                            Waktu Reschedule
-                        </p>
-                        <?php
-                        $displayWaktu = '-';
-                        if ($selectedJamMulai && $selectedDurasi) {
-                            $tmpStart = strtotime($selectedJamMulai);
-                            $tmpEnd   = strtotime($selectedJamMulai . " + {$selectedDurasi} hour");
-                            $displayWaktu =
-                                date('H.i', $tmpStart) . ' – ' . date('H.i', $tmpEnd);
-                        }
-                        ?>
-                        <div
-                            class="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm">
-                            <span class="text-slate-500">Terpilih</span>
-                            <span class="font-semibold text-slate-900" id="waktu-reschedule-text">
-                                <?= $displayWaktu ?>
-                            </span>
-                        </div>
-                    </div>
-
-                    <!-- Alasan Reschedule -->
-                    <div class="space-y-1">
-                        <label class="block text-sm font-medium text-slate-700 mb-1">
-                            Alasan Reschedule
-                        </label>
-                        <textarea
-                            name="alasan"
-                            rows="3"
-                            class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm
-                                   focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-300"
-                            placeholder="Contoh: Jadwal bentrok dengan ujian, menyesuaikan ketersediaan anggota, dsb."><?= htmlspecialchars($reschedule['alasan'] ?? '') ?></textarea>
-                    </div>
-
-                    <div class="pt-2">
-                        <button
-                            type="submit"
-                            class="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm
-                                   hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1">
-                            Edit Kelompok (Simpan Jadwal Baru)
-                        </button>
-                    </div>
-                </form>
-
-                <!-- FORM AJUKAN RESCHEDULE -->
-                <?php if ($isPJ): ?>
+                    <!-- FORM AJUKAN RESCHEDULE – hanya PJ -->
                     <form action="index.php?controller=userReschedule&action=finalizeReschedule"
                         method="POST"
                         class="pt-2">
@@ -458,8 +502,8 @@ $nowMinutes      = (int)date('H') * 60 + (int)date('i'); // menit sejak 00:00
                         <input type="hidden" name="id_reschedule" value="<?= (int)$rescheduleId ?>">
 
                         <?php
-                        // tombol hanya aktif kalau sudah ada draft reschedule
-                        $disableFinalize = empty($rescheduleId);
+                        // tombol aktif hanya kalau sudah ada draft reschedule dan belum submitted
+                        $disableFinalize = empty($rescheduleId) || $isRescheduleSubmitted;
                         ?>
                         <button
                             type="submit"
@@ -469,7 +513,7 @@ $nowMinutes      = (int)date('H') * 60 + (int)date('i'); // menit sejak 00:00
                                    <?= $disableFinalize ? 'opacity-40 cursor-not-allowed' : '' ?>">
                             Ajukan Reschedule
                         </button>
-                        <?php if ($disableFinalize): ?>
+                        <?php if ($disableFinalize && !$isRescheduleSubmitted): ?>
                             <p class="mt-1 text-xs text-slate-500">
                                 Simpan dulu jadwal baru dengan tombol
                                 <span class="font-semibold">"Edit Kelompok"</span>
@@ -477,8 +521,9 @@ $nowMinutes      = (int)date('H') * 60 + (int)date('i'); // menit sejak 00:00
                             </p>
                         <?php endif; ?>
                     </form>
-                <?php endif; ?>
 
+                <?php endif; // end if isPJ 
+                ?>
             </section>
         </section>
     </main>
@@ -495,7 +540,6 @@ $nowMinutes      = (int)date('H') * 60 + (int)date('i'); // menit sejak 00:00
             });
         }
 
-        // LOGIKA JAM & DURASI
         const selectJam = document.getElementById('jam_mulai_baru');
         const selectDur = document.getElementById('durasi_baru');
         const waktuText = document.getElementById('waktu-reschedule-text');
@@ -506,7 +550,100 @@ $nowMinutes      = (int)date('H') * 60 + (int)date('i'); // menit sejak 00:00
             return n < 10 ? '0' + n : '' + n;
         }
 
+        // ==== INFO JAM OPERASIONAL & ISTIRAHAT (JS) ====
+        function getDayInfo(dateStr) {
+            const d = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+            const day = d.getDay(); // 0 = Minggu, 1 = Senin, ..., 5 = Jumat
+
+            // default Sen–Kam (dan selain Jumat)
+            let info = {
+                openMinutes: 8 * 60,
+                closeMinutes: 16 * 60, // 16.00 (dibulatkan dari 15.50)
+                breakStartMinutes: 12 * 60,
+                breakEndMinutes: 13 * 60
+            };
+
+            // Jumat
+            if (day === 5) {
+                info = {
+                    openMinutes: 8 * 60,
+                    closeMinutes: 17 * 60, // 17.00 (dibulatkan dari 16.50)
+                    breakStartMinutes: 11 * 60,
+                    breakEndMinutes: 13 * 60
+                };
+            }
+
+            return info;
+        }
+
+        // Hitung durasi maksimal yang boleh dari jam mulai tertentu
+        function getMaxDuration(startTime, dateStr) {
+            if (!startTime) return 0;
+
+            const [h, m] = startTime.split(':').map(Number);
+            const startMinutes = h * 60 + m;
+            const info = getDayInfo(dateStr);
+
+            const open = info.openMinutes;
+            const close = info.closeMinutes;
+            const bStart = info.breakStartMinutes;
+            const bEnd = info.breakEndMinutes;
+
+            if (startMinutes < open || startMinutes >= close) {
+                return 0;
+            }
+
+            let maxDur = 0;
+
+            // coba durasi 1–3 jam
+            for (let dur = 1; dur <= 3; dur++) {
+                const endMinutes = startMinutes + dur * 60;
+
+                // tidak boleh lewat jam tutup
+                if (endMinutes > close) break;
+
+                // tidak boleh memotong jam istirahat
+                const kenaIstirahat = (startMinutes < bEnd && endMinutes > bStart);
+                if (kenaIstirahat) continue;
+
+                maxDur = dur;
+            }
+
+            return maxDur;
+        }
+
+        // aktif/nonaktifkan pilihan durasi berdasarkan jam & hari
+        function updateDurasiOptions() {
+            if (!selectDur) return;
+
+            const dateStr = tanggalInput ? tanggalInput.value : '';
+            const jamMulai = selectJam ? selectJam.value : '';
+
+            const opts = Array.from(selectDur.options).filter(o => o.value);
+            opts.forEach(o => o.disabled = true);
+
+            if (!jamMulai || !dateStr) return;
+
+            const maxDur = getMaxDuration(jamMulai, dateStr);
+
+            opts.forEach(o => {
+                const val = parseInt(o.value, 10);
+                if (val >= 1 && val <= maxDur) {
+                    o.disabled = false;
+                }
+            });
+
+            if (selectDur.value) {
+                const v = parseInt(selectDur.value, 10);
+                if (v > maxDur || maxDur === 0) {
+                    selectDur.value = '';
+                }
+            }
+        }
+
         function updateWaktuReschedule() {
+            if (!selectJam || !selectDur || !waktuText) return;
+
             const jam = selectJam.value;
             const dur = parseInt(selectDur.value || '0', 10);
 
@@ -527,8 +664,16 @@ $nowMinutes      = (int)date('H') * 60 + (int)date('i'); // menit sejak 00:00
             waktuText.textContent = startLabel + ' – ' + endLabel;
         }
 
-        if (selectJam) selectJam.addEventListener('change', updateWaktuReschedule);
-        if (selectDur) selectDur.addEventListener('change', updateWaktuReschedule);
+        if (selectJam) {
+            selectJam.addEventListener('change', () => {
+                updateDurasiOptions();
+                updateWaktuReschedule();
+            });
+        }
+
+        if (selectDur) {
+            selectDur.addEventListener('change', updateWaktuReschedule);
+        }
 
         slotButtons.forEach(btn => {
             btn.addEventListener('click', () => {
@@ -546,6 +691,7 @@ $nowMinutes      = (int)date('H') * 60 + (int)date('i'); // menit sejak 00:00
                 slotButtons.forEach(b => b.classList.remove('ring-2', 'ring-slate-400'));
                 btn.classList.add('ring-2', 'ring-slate-400');
 
+                updateDurasiOptions();
                 updateWaktuReschedule();
             });
         });
@@ -572,10 +718,16 @@ $nowMinutes      = (int)date('H') * 60 + (int)date('i'); // menit sejak 00:00
                 window.location.search = params.toString();
             });
         }
+
+        // init awal
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDurasiOptions();
+            updateWaktuReschedule();
+        });
     </script>
 
-    <!-- JS countdown join_reschedule_until (kalau ada & belum diajukan) -->
-    <?php if (!empty($joinUntil) && !$isRescheduleSubmitted): ?>
+    <!-- JS countdown join_reschedule_until (kalau ada & belum diajukan & belum expired) -->
+    <?php if (!empty($joinUntil) && !$isRescheduleSubmitted && !$joinExpired): ?>
         <script>
             (function() {
                 const expireAt = new Date("<?= date('c', strtotime($joinUntil)) ?>").getTime();
@@ -583,7 +735,7 @@ $nowMinutes      = (int)date('H') * 60 + (int)date('i'); // menit sejak 00:00
                 if (!el) return;
 
                 function updateCountdown() {
-                    const now = new Date().getTime();
+                    const now = Date.now();
                     const diff = expireAt - now;
 
                     if (diff <= 0) {

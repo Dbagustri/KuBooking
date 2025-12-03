@@ -166,4 +166,144 @@ class Room extends Model
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+    // Update status 1 ruangan
+    public function updateStatus(int $idRuangan, string $status): bool
+    {
+        if (!in_array($status, ['aktif', 'nonaktif'], true)) {
+            return false;
+        }
+
+        $sql = "UPDATE " . self::$table . " 
+            SET status_operasional = :status
+            WHERE id_ruangan = :id";
+
+        $stmt = self::$db->prepare($sql);
+        return $stmt->execute([
+            'status' => $status,
+            'id'     => $idRuangan,
+        ]);
+    }
+
+    // Nonaktifkan / aktifkan semua ruangan
+    public function updateAllStatus(string $status): bool
+    {
+        if (!in_array($status, ['aktif', 'nonaktif'], true)) {
+            return false;
+        }
+
+        $sql = "UPDATE " . self::$table . " 
+            SET status_operasional = :status";
+
+        $stmt = self::$db->prepare($sql);
+        return $stmt->execute(['status' => $status]);
+    }
+
+    /**
+     * Cek apakah 1 ruangan punya booking aktif (hari ini & ke depan).
+     * "Aktif" = 
+     *   - submitted = 1 ATAU group_expire_at masih berlaku / null
+     *   - status terakhir bukan rejected/cancelled
+     *   - tanggal >= hari ini
+     */
+    public function hasActiveBookings(int $idRuangan): bool
+    {
+        $sql = "
+        SELECT b.id_bookings
+        FROM bookings b
+        LEFT JOIN Booking_status bs_latest
+            ON bs_latest.id_status = (
+                SELECT MAX(bs2.id_status)
+                FROM Booking_status bs2
+                WHERE bs2.id_bookings = b.id_bookings
+            )
+        WHERE 
+            b.id_ruangan = :room
+            AND b.tanggal >= CURDATE()
+            AND (
+                b.submitted = 1
+                OR b.group_expire_at IS NULL
+                OR b.group_expire_at >= NOW()
+            )
+            AND (
+                bs_latest.status IS NULL
+                OR bs_latest.status NOT IN ('rejected', 'cancelled')
+            )
+        LIMIT 1
+    ";
+
+        $stmt = self::$db->prepare($sql);
+        $stmt->execute(['room' => $idRuangan]);
+
+        return (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Cek apakah ADA ruangan manapun yang masih punya booking aktif.
+     */
+    public function hasAnyActiveBookings(): bool
+    {
+        $sql = "
+        SELECT b.id_bookings
+        FROM bookings b
+        LEFT JOIN Booking_status bs_latest
+            ON bs_latest.id_status = (
+                SELECT MAX(bs2.id_status)
+                FROM Booking_status bs2
+                WHERE bs2.id_bookings = b.id_bookings
+            )
+        WHERE 
+            b.tanggal >= CURDATE()
+            AND (
+                b.submitted = 1
+                OR b.group_expire_at IS NULL
+                OR b.group_expire_at >= NOW()
+            )
+            AND (
+                bs_latest.status IS NULL
+                OR bs_latest.status NOT IN ('rejected', 'cancelled')
+            )
+        LIMIT 1
+    ";
+
+        $stmt = self::$db->query($sql);
+        return (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+    }
+    public function setAllStatus(string $status): bool
+    {
+        $sql = "UPDATE " . self::$table . " SET status_operasional = :status";
+        $stmt = self::$db->prepare($sql);
+        return $stmt->execute(['status' => $status]);
+    }
+
+    public function anyActive(): bool
+    {
+        $sql = "SELECT COUNT(*) FROM " . self::$table . " WHERE status_operasional = 'aktif'";
+        $stmt = self::$db->query($sql);
+        return ((int)$stmt->fetchColumn()) > 0;
+    }
+    public function updateRoom(int $idRuangan, array $data): bool
+    {
+        $sql = "UPDATE " . self::$table . "
+            SET 
+                nama_ruangan       = :nama_ruangan,
+                lokasi             = :lokasi,
+                kategori           = :kategori,
+                kapasitas_min      = :kapasitas_min,
+                kapasitas_max      = :kapasitas_max,
+                status_operasional = :status_operasional,
+                foto_ruangan       = :foto_ruangan
+            WHERE id_ruangan = :id";
+
+        $stmt = self::$db->prepare($sql);
+        return $stmt->execute([
+            'nama_ruangan'       => $data['nama_ruangan'],
+            'lokasi'             => $data['lokasi'] ?? null,
+            'kategori'           => $data['kategori'] ?? null,
+            'kapasitas_min'      => $data['kapasitas_min'],
+            'kapasitas_max'      => $data['kapasitas_max'],
+            'status_operasional' => $data['status_operasional'],
+            'foto_ruangan'       => $data['foto_ruangan'] ?? null,
+            'id'                 => $idRuangan,
+        ]);
+    }
 }

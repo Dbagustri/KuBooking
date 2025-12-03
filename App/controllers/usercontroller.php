@@ -10,9 +10,6 @@ use App\Models\Account;
 
 class UserController extends Controller
 {
-    /**
-     * Home user → sekarang diarahkan ke UserBookingController::home
-     */
     public function home()
     {
         $this->redirect('index.php?controller=userBooking&action=home');
@@ -45,7 +42,7 @@ class UserController extends Controller
         // Ambil fasilitas
         $fasilitas = $roomModel->getFasilitas($id);
 
-        // Ambil booking hari ini (pakai start_time / end_time)
+        // Ambil booking hari ini
         $booked = $roomModel->getBookedSlotsToday($id);
 
         // Slot tetap (untuk tampilan saja)
@@ -63,7 +60,28 @@ class UserController extends Controller
             }
         }
 
-        // Cek booking aktif user (disable tombol Pesan)
+        // === AMBIL JADWAL RUANGAN & BIKIN TEKS JAM OPERASIONAL ===
+        $scheduleRows = $roomModel->getScheduleByRoom((int)$id);
+
+        $jamOperasionalText = '';
+        if (!empty($scheduleRows)) {
+            $lines = [];
+            foreach ($scheduleRows as $row) {
+                $open  = substr($row['open_time'], 0, 5);
+                $close = substr($row['close_time'], 0, 5);
+                $line = $row['hari'] . ': ' . $open . '–' . $close;
+                if (!empty($row['break_start']) && !empty($row['break_end'])) {
+                    $breakStart = substr($row['break_start'], 0, 5);
+                    $breakEnd   = substr($row['break_end'], 0, 5);
+                    $line .= " (Istirahat {$breakStart}–{$breakEnd})";
+                }
+
+                $lines[] = $line;
+            }
+
+            $jamOperasionalText = implode("\n", $lines);
+        }
+
         $bookingModel = new BookingUser();
         $user         = Auth::user();
         $idUser       = $user['id_account'] ?? null;
@@ -73,7 +91,6 @@ class UserController extends Controller
         $canBook        = Auth::isActive();
         $buttonDisabled = (!$canBook || !empty($booking_aktif));
 
-        // Kirim data ke view
         $this->view('user/detailroom', [
             'room'           => $room,
             'fasilitas'      => $fasilitas,
@@ -82,8 +99,10 @@ class UserController extends Controller
             'buttonDisabled' => $buttonDisabled,
             'booking_aktif'  => $booking_aktif,
             'canBook'        => $canBook,
+            'jamOperasionalText' => $jamOperasionalText,
         ]);
     }
+
 
 
     public function profil()

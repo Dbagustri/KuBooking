@@ -8,6 +8,7 @@ require __DIR__ . '/../app/core/router.php';
 
 require __DIR__ . '/../app/controllers/authcontroller.php';
 require __DIR__ . '/../app/controllers/admincontroller.php';
+require __DIR__ . '/../app/controllers/adminajaxcontroller.php';
 require __DIR__ . '/../app/controllers/usercontroller.php';
 require __DIR__ . '/../app/controllers/userbookingcontroller.php';
 require __DIR__ . '/../app/controllers/UserRescheduleController.php';
@@ -25,6 +26,7 @@ require __DIR__ . '/../app/models/bookinguser.php';
 require __DIR__ . '/../app/models/bookingadmin.php';
 require __DIR__ . '/../app/models/laporan.php';
 
+date_default_timezone_set('Asia/Jakarta');
 
 use App\Core\Router;
 

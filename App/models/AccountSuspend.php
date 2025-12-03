@@ -109,4 +109,12 @@ class AccountSuspend extends Model
             ];
         }
     }
+    public function resetCounter(int $idUser): void
+    {
+        $sql = "UPDATE Account_suspend
+            SET suspend_count = 0
+            WHERE id_user = :id";
+        $stmt = self::$db->prepare($sql);
+        $stmt->execute(['id' => $idUser]);
+    }
 }
