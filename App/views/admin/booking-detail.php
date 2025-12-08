@@ -32,13 +32,7 @@
         <?php
         // Pastikan $booking ada
         $booking = $booking ?? [];
-
-        // =========================
-        // Normalisasi data booking
-        // =========================
-
         $kodeBooking = $booking['booking_code'] ?? $booking['kode'] ?? '-';
-
         $namaPj = $booking['pj_nama']
             ?? $booking['nama_pj']
             ?? $booking['pj']

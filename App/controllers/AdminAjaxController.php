@@ -89,8 +89,8 @@ class AdminAjaxController extends Controller
             ]);
         }
 
-        $openTime  = $schedule['open_time'];   // '08:00:00'
-        $closeTime = $schedule['close_time'];  // '16:00:00'
+        $openTime   = $schedule['open_time'];   // '08:00:00'
+        $closeTime  = $schedule['close_time'];  // '16:00:00'
         $breakStart = $schedule['break_start'] ?? null;
         $breakEnd   = $schedule['break_end'] ?? null;
 
@@ -197,6 +197,7 @@ class AdminAjaxController extends Controller
      * - Harus ada di tabel Account
      * - status_aktif = 'aktif'
      * - Tidak memiliki booking aktif (getActiveBookingForUser)
+     * - Tidak memiliki booking 'selesai' yang belum ia rating
      *
      * Input: nim
      * Output: { success: true, user: {id_account, nama, nim_nip, role, status_aktif} } atau error.
@@ -248,13 +249,23 @@ class AdminAjaxController extends Controller
             ]);
         }
 
+        // ✅ Cek booking selesai yang belum diberi rating oleh user ini
+        $unrated = $bookingModel->getUnratedFinishedBookingForUser($idUser);
+        if ($unrated) {
+            $this->jsonResponse([
+                'success' => false,
+                'message' => 'User ini memiliki peminjaman yang sudah selesai namun belum memberi rating. ' .
+                    'Minta user untuk memberi rating terlebih dahulu sebelum dibuatkan booking baru.',
+            ]);
+        }
+
         $this->jsonResponse([
             'success' => true,
             'user'    => [
-                'id_account'  => $user['id_account'],
-                'nama'        => $user['nama'],
-                'nim_nip'     => $user['nim_nip'],
-                'role'        => $user['role'] ?? null,
+                'id_account'   => $user['id_account'],
+                'nama'         => $user['nama'],
+                'nim_nip'      => $user['nim_nip'],
+                'role'         => $user['role'] ?? null,
                 'status_aktif' => $user['status_aktif'] ?? null,
             ],
         ]);

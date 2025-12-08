@@ -31,48 +31,55 @@
         </div>
 
         <?php
-        $rooms        = $rooms ?? [];
-        $search       = $_GET['q']      ?? '';
-        $statusFilter = $_GET['status'] ?? 'all';
+        // Data dari controller
+        $rooms        = $rooms        ?? [];
+        $search       = $search       ?? '';
+        $statusFilter = $status       ?? 'all';
+        $currentPage  = $current_page ?? 1;
+        $totalPages   = $total_pages  ?? 1;
+        $anyActive    = $anyActive    ?? false;
 
-        // Cek apakah ada ruangan aktif (untuk tombol ON/OFF semua)
-        $anyActive = false;
-        foreach ($rooms as $r) {
-            if (($r['status_operasional'] ?? '') === 'aktif') {
-                $anyActive = true;
-                break;
-            }
-        }
-
-        $btnLabel     = $anyActive ? 'Nonaktifkan Semua (OFF)' : 'Aktifkan Semua (ON)';
-        $btnColor     = $anyActive ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700';
-        $confirmText  = $anyActive
+        $btnLabel    = $anyActive ? 'Nonaktifkan Semua (OFF)' : 'Aktifkan Semua (ON)';
+        $btnColor    = $anyActive ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700';
+        $confirmText = $anyActive
             ? 'Yakin ingin menonaktifkan seluruh ruangan?'
             : 'Aktifkan semua ruangan?';
         ?>
 
         <div class="px-8 pb-10 space-y-6">
 
-            <!-- HEADER + TOGGLE ALL -->
+            <!-- HEADER + ACTIONS -->
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div>
                     <h1 class="text-2xl font-bold text-[#1e3a5f]">Kelola Ruangan</h1>
+                    <p class="text-sm text-gray-500 mt-1">
+                        Lihat, atur status, dan kelola informasi ruangan perpustakaan.
+                    </p>
                 </div>
 
-                <form action="index.php?controller=admin&action=toggleAllRooms"
-                    method="POST"
-                    onsubmit="return confirm('<?= $confirmText ?>');">
-                    <button type="submit"
-                        class="px-4 py-2 rounded-full text-sm font-semibold text-white shadow flex items-center gap-2 <?= $btnColor ?>">
+                <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
+                    <!-- Tombol Tambah Ruangan (ganti URL action kalau berbeda) -->
+                    <a href="index.php?controller=admin&action=tambahRuangan"
+                        class="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-semibold text-white bg-[#1e3a5f] hover:bg-[#163052] shadow">
+                        + Tambah Ruangan
+                    </a>
 
-                        <!-- Icon toggle kecil -->
-                        <span class="inline-flex items-center w-9 h-5 rounded-full bg-white/20 border border-white/40 relative">
-                            <span class="inline-block w-4 h-4 rounded-full bg-white shadow transform <?= $anyActive ? 'translate-x-4' : 'translate-x-0' ?>"></span>
-                        </span>
+                    <!-- Toggle semua ruangan ON/OFF -->
+                    <form action="index.php?controller=admin&action=toggleAllRooms"
+                        method="POST"
+                        onsubmit="return confirm('<?= $confirmText ?>');">
+                        <button type="submit"
+                            class="px-4 py-2 rounded-full text-sm font-semibold text-white shadow flex items-center gap-2 <?= $btnColor ?>">
 
-                        <span><?= htmlspecialchars($btnLabel) ?></span>
-                    </button>
-                </form>
+                            <!-- Icon toggle kecil -->
+                            <span class="inline-flex items-center w-9 h-5 rounded-full bg-white/20 border border-white/40 relative">
+                                <span class="inline-block w-4 h-4 rounded-full bg-white shadow transform <?= $anyActive ? 'translate-x-4' : 'translate-x-0' ?>"></span>
+                            </span>
+
+                            <span><?= htmlspecialchars($btnLabel) ?></span>
+                        </button>
+                    </form>
+                </div>
             </div>
 
             <!-- FILTER & SEARCH -->
@@ -84,9 +91,9 @@
                 <!-- FILTER STATUS -->
                 <select name="status"
                     class="bg-white border border-gray-300 rounded-full px-4 py-2 text-sm shadow w-full lg:w-auto">
-                    <option value="all" <?= $statusFilter === 'all'      ? 'selected' : '' ?>>Semua Status</option>
-                    <option value="aktif" <?= $statusFilter === 'aktif'    ? 'selected' : '' ?>>Aktif</option>
-                    <option value="nonaktif" <?= $statusFilter === 'nonaktif' ? 'selected' : '' ?>>Nonaktif</option>
+                    <option value="all" <?= $statusFilter === 'all'       ? 'selected' : '' ?>>Semua Status</option>
+                    <option value="aktif" <?= $statusFilter === 'aktif'     ? 'selected' : '' ?>>Aktif</option>
+                    <option value="nonaktif" <?= $statusFilter === 'nonaktif'  ? 'selected' : '' ?>>Nonaktif</option>
                 </select>
 
                 <!-- SEARCH -->
@@ -111,6 +118,7 @@
                         <tr class="bg-[#1e3a5f] text-white text-left text-sm">
                             <th class="px-4 py-3">Nama</th>
                             <th class="px-4 py-3">Kategori</th>
+                            <th class="px-4 py-3">Lokasi</th>
                             <th class="px-4 py-3">Kapasitas</th>
                             <th class="px-4 py-3">Status</th>
                             <th class="px-4 py-3 text-center">Aksi</th>
@@ -118,34 +126,24 @@
                     </thead>
 
                     <tbody>
-                        <?php
-                        // Flag untuk cek apakah setelah filter masih ada data
-                        $hasVisible = false;
-
-                        if (!empty($rooms)):
-                            foreach ($rooms as $i => $r):
+                        <?php if (!empty($rooms)): ?>
+                            <?php foreach ($rooms as $i => $r): ?>
+                                <?php
                                 $id        = (int)$r['id_ruangan'];
                                 $nama      = $r['nama_ruangan'] ?? '-';
                                 $kategori  = $r['kategori'] ?? '-';
-                                $kapasitas = "{$r['kapasitas_min']} - {$r['kapasitas_max']}";
+                                $lokasi    = $r['lokasi'] ?? '-';
+                                $kapMin    = (int)($r['kapasitas_min'] ?? 0);
+                                $kapMax    = (int)($r['kapasitas_max'] ?? 0);
+                                $kapasitas = $kapMin && $kapMax ? "{$kapMin} - {$kapMax}" : '-';
                                 $status    = $r['status_operasional'] ?? 'nonaktif';
-
-                                // Filter status di view (all / aktif / nonaktif)
-                                if ($statusFilter === 'aktif' && $status !== 'aktif') {
-                                    continue;
-                                }
-                                if ($statusFilter === 'nonaktif' && $status !== 'nonaktif') {
-                                    continue;
-                                }
-
-                                $hasVisible = true;
 
                                 $badgeClass = $status === 'aktif'
                                     ? 'bg-green-100 text-green-800'
                                     : 'bg-gray-200 text-gray-700';
 
                                 $rowClass = $i % 2 === 0 ? 'bg-gray-50' : 'bg-gray-100';
-                        ?>
+                                ?>
                                 <tr class="<?= $rowClass ?> text-sm text-gray-800 border-b last:border-b-0">
                                     <td class="px-4 py-3">
                                         <div class="flex flex-col">
@@ -158,6 +156,12 @@
                                     <td class="px-4 py-3">
                                         <span class="text-slate-700">
                                             <?= htmlspecialchars($kategori) ?>
+                                        </span>
+                                    </td>
+
+                                    <td class="px-4 py-3">
+                                        <span class="text-slate-700">
+                                            <?= htmlspecialchars($lokasi) ?>
                                         </span>
                                     </td>
 
@@ -178,7 +182,9 @@
                                         <div class="relative inline-block text-left">
                                             <button type="button"
                                                 onclick="toggleMenu('room-<?= $id ?>')"
-                                                class="inline-flex justify-center w-8 h-8 rounded-full hover:bg-gray-200 text-xl leading-none">
+                                                class="inline-flex justify-center w-8 h-8 rounded-full hover:bg-gray-200 text-xl leading-none"
+                                                aria-haspopup="true"
+                                                aria-expanded="false">
                                                 &#8226;&#8226;&#8226;
                                             </button>
 
@@ -241,13 +247,16 @@
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
-                        <?php endif; ?>
-
-                        <?php if (empty($rooms) || !$hasVisible): ?>
+                        <?php else: ?>
+                            <!-- EMPTY STATE -->
                             <tr>
-                                <td colspan="5" class="px-4 py-8 text-center text-gray-500">
-                                    <?php if (!empty($rooms) && !$hasVisible): ?>
+                                <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                                    <?php if ($search !== '' || $statusFilter !== 'all'): ?>
                                         Tidak ada ruangan yang cocok dengan filter.
+                                        <a href="index.php?controller=admin&action=ruangan"
+                                            class="text-[#1e3a5f] underline text-sm ml-1">
+                                            Reset filter
+                                        </a>
                                     <?php else: ?>
                                         Belum ada data ruangan.
                                     <?php endif; ?>
@@ -258,6 +267,27 @@
                 </table>
             </div>
 
+            <!-- PAGINATION -->
+            <?php if (!empty($totalPages) && $totalPages > 1): ?>
+                <div class="flex flex-col sm:flex-row items-center justify-between mt-4 text-sm gap-3">
+                    <span class="text-gray-600">
+                        Halaman <?= (int)$currentPage ?> dari <?= (int)$totalPages ?>
+                    </span>
+
+                    <div class="flex flex-wrap gap-2 justify-center sm:justify-end">
+                        <?php for ($p = 1; $p <= $totalPages; $p++): ?>
+                            <a href="index.php?controller=admin&action=ruangan&page=<?= $p ?>&q=<?= urlencode($search) ?>&status=<?= urlencode($statusFilter) ?>"
+                                class="px-3 py-1 rounded-full border text-xs
+                                      <?= $p == $currentPage
+                                            ? 'bg-[#1e3a5f] text-white border-[#1e3a5f]'
+                                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100' ?>">
+                                <?= $p ?>
+                            </a>
+                        <?php endfor; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
         </div>
     </div>
 
@@ -265,7 +295,12 @@
         function toggleMenu(id) {
             const menu = document.getElementById(id);
             if (!menu) return;
-            menu.classList.toggle('hidden');
+            const isHidden = menu.classList.contains('hidden');
+            // Tutup semua dulu
+            document.querySelectorAll("[id^='room-']").forEach(m => m.classList.add('hidden'));
+            if (isHidden) {
+                menu.classList.remove('hidden');
+            }
         }
 
         // Tutup dropdown jika klik di luar
@@ -278,7 +313,6 @@
             });
         });
     </script>
-
 </body>
 
 </html>

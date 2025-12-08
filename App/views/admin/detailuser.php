@@ -24,28 +24,20 @@
             <?php
             $navPath = __DIR__ . '/../layout/nav-admin.php';
             if (file_exists($navPath)) {
-                // Perbaikan: Gunakan require_once atau include_once untuk memastikan file di-load sekali
                 include_once $navPath;
             }
             ?>
         </div>
 
         <?php
-        /**
-         * PERHATIAN: Asumsi variabel $user sudah didefinisikan sebelum file ini di-include
-         * di dalam controller dan berisi data user.
-         */
         $user = $user ?? [];
 
-        // Inisialisasi dan Sanitasi/Pengambilan Data
         $idUser       = isset($user['id_account']) ? (int)$user['id_account'] : 0;
         $nama         = htmlspecialchars($user['nama'] ?? '-', ENT_QUOTES, 'UTF-8');
         $email        = htmlspecialchars($user['email'] ?? '-', ENT_QUOTES, 'UTF-8');
         $nimNip       = htmlspecialchars($user['nim_nip'] ?? '-', ENT_QUOTES, 'UTF-8');
-        // Role & Status tidak perlu di-escape di sini, akan di-escape saat echo label
         $role         = $user['role'] ?? 'mahasiswa';
         $statusAktif  = $user['status_aktif'] ?? 'nonaktif';
-
         $jurusan      = htmlspecialchars($user['jurusan'] ?? '', ENT_QUOTES, 'UTF-8');
         $prodi        = htmlspecialchars($user['prodi'] ?? '', ENT_QUOTES, 'UTF-8');
         $unitJurusan  = htmlspecialchars($user['unit_jurusan'] ?? '', ENT_QUOTES, 'UTF-8');
@@ -54,10 +46,8 @@
         $aktifSampai  = htmlspecialchars($user['aktif_sampai'] ?? '-', ENT_QUOTES, 'UTF-8');
         $createdAt    = htmlspecialchars($user['created_at'] ?? '-', ENT_QUOTES, 'UTF-8');
         $lastLogin    = htmlspecialchars($user['last_login'] ?? '-', ENT_QUOTES, 'UTF-8');
-        // URL Screenshot perlu di-escape untuk output href dan src
         $screenshot   = htmlspecialchars($user['screenshot_kubaca'] ?? '', ENT_QUOTES, 'UTF-8');
 
-        // Badge role
         switch ($role) {
             case 'admin':
                 $roleLabel = 'Admin';
@@ -90,13 +80,8 @@
             $statusLabel = 'Nonaktif';
             $statusClass = 'bg-gray-200 text-gray-700';
         }
-
-        // Status toggle target
         $targetStatus = $statusAktif === 'aktif' ? 'nonaktif' : 'aktif';
-        // Perbaikan: Escape target status untuk dimasukkan ke input hidden
         $escapedTargetStatus = htmlspecialchars($targetStatus, ENT_QUOTES, 'UTF-8');
-
-        // Perbaikan: Escape pesan konfirmasi
         $konfirmasiPesan = $targetStatus === 'nonaktif' ? 'Nonaktifkan user ini?' : 'Aktifkan kembali user ini?';
         $escapedKonfirmasiPesan = htmlspecialchars($konfirmasiPesan, ENT_QUOTES, 'UTF-8');
         ?>
@@ -258,7 +243,7 @@
 
                         <form action="index.php?controller=admin&action=setUserStatus"
                             method="POST"
-                            onsubmit="return confirm('<?= $escapedKonfirmasiPesan // Sudah di-escape di atas 
+                            onsubmit="return confirm('<?= $escapedKonfirmasiPesan
                                                         ?>');">
                             <input type="hidden" name="id_user" value="<?= $idUser ?>">
                             <input type="hidden" name="status" value="<?= $escapedTargetStatus ?>">

@@ -61,24 +61,35 @@ class UserBookingController extends Controller
         $bookingModel = new BookingUser();
         $roomModel    = new Room();
 
-        $account       = $this->getCurrentAccount();
-        $booking_aktif = null;
-        $canBook       = false;
+        $account        = $this->getCurrentAccount();
+        $booking_aktif  = null;
+        $canBook        = false;
+        $unratedBooking = null;
 
         if ($account) {
             $canBook       = ($account['status_aktif'] ?? '') === 'aktif';
             $booking_aktif = $bookingModel->getActiveBookingForUser((int)$account['id_account']);
+
+            // Kalau status aktif dan tidak ada booking aktif, cek apakah ada booking selesai yang belum dirating
+            if ($canBook && !$booking_aktif) {
+                $unratedBooking = $bookingModel->getUnratedFinishedBookingForUser((int)$account['id_account']);
+                if ($unratedBooking) {
+                    // Lock booking baru sampai user memberi rating
+                    $canBook = false;
+                }
+            }
         }
 
         $rooms     = $roomModel->getAllActive();
         $joinError = $_GET['join_error'] ?? null;
 
         $this->view('user/home', [
-            'currentUser'   => $account,
-            'booking_aktif' => $booking_aktif,
-            'rooms'         => $rooms,
-            'join_error'    => $joinError,
-            'canBook'       => $canBook,
+            'currentUser'    => $account,
+            'booking_aktif'  => $booking_aktif,
+            'rooms'          => $rooms,
+            'join_error'     => $joinError,
+            'canBook'        => $canBook,
+            'unratedBooking' => $unratedBooking, // opsional, kalau mau ditampilkan di view
         ]);
     }
 
@@ -215,6 +226,8 @@ class UserBookingController extends Controller
             );
             return;
         }
+
+        // Validasi durasi
         if ($durasi < 1 || $durasi > 3) {
             $this->redirectWithMessage(
                 'index.php?controller=userBooking&action=home',
@@ -223,11 +236,25 @@ class UserBookingController extends Controller
             );
             return;
         }
+
+        // Cek booking aktif
         $activeBooking = $bookingModel->getActiveBookingForUser((int)$idUser);
         if ($activeBooking) {
             $this->redirectWithMessage(
                 'index.php?controller=userBooking&action=home',
                 'Anda masih memiliki peminjaman aktif. Selesaikan peminjaman tersebut sebelum membuat booking baru.',
+                'error'
+            );
+            return;
+        }
+
+        // ✅ Cek booking selesai yang belum dirating
+        $unrated = $bookingModel->getUnratedFinishedBookingForUser((int)$idUser);
+        if ($unrated) {
+            $this->redirectWithMessage(
+                'index.php?controller=userBooking&action=riwayat',
+                'Anda memiliki peminjaman yang sudah selesai namun belum diberi rating. ' .
+                    'Silakan beri rating terlebih dahulu sebelum membuat booking baru.',
                 'error'
             );
             return;
@@ -257,7 +284,7 @@ class UserBookingController extends Controller
         $start = $tanggal . ' ' . $jamMulai . ':00';
         $end   = date('Y-m-d H:i:s', strtotime($start . " + {$durasi} hour"));
 
-        // Hanya cek bentrok (jam operasional sudah kamu matikan)
+        // Cek bentrok dengan booking lain
         if ($bookingModel->isBentrok((int)$idRoom, $start, $end)) {
             $disabledSlots = $bookingModel->getDisabledSlotsForRoomDate((int)$idRoom, $tanggal);
 
@@ -277,7 +304,6 @@ class UserBookingController extends Controller
 
         $expireAt = date('Y-m-d H:i:s', strtotime('+5 minutes'));
 
-        // bookingUser::createGroupBooking → jumlah_anggota diset 0 di model
         $idBooking = $bookingModel->createGroupBooking([
             'id_pj'           => (int)$idUser,
             'id_ruangan'      => (int)$idRoom,
@@ -285,18 +311,20 @@ class UserBookingController extends Controller
             'kode_kelompok'   => $kodeKelompok,
             'start_time'      => $start,
             'end_time'        => $end,
-            'jumlah_anggota'  => 0,               // akan dinaikkan lewat addMember()
+            'jumlah_anggota'  => 0,
             'tanggal'         => $tanggal,
             'keperluan'       => $keperluan,
             'group_expire_at' => $expireAt,
             'submitted'       => 0,
         ]);
+
         $bookingModel->addMember($idBooking, (int)$idUser);
 
         $this->redirect(
             "index.php?controller=userBooking&action=booking&id_ruangan={$idRoom}&id_booking={$idBooking}"
         );
     }
+
 
     public function groupDetail()
     {
@@ -359,7 +387,7 @@ class UserBookingController extends Controller
         $bookingModel    = new BookingUser();
         $rescheduleModel = new BookingReschedule();
 
-        // Cek apakah user sudah punya booking aktif (pending / approved / reschedule_x)
+        // Cek apakah user sudah punya booking aktif
         $activeBooking = $bookingModel->getActiveBookingForUser((int)$idUser);
         if ($activeBooking) {
             $this->redirectWithMessage(
@@ -369,6 +397,19 @@ class UserBookingController extends Controller
             );
             return;
         }
+
+        // ✅ Cek booking selesai yang belum dirating
+        $unrated = $bookingModel->getUnratedFinishedBookingForUser((int)$idUser);
+        if ($unrated) {
+            $this->redirectWithMessage(
+                'index.php?controller=userBooking&action=riwayat',
+                'Anda memiliki peminjaman yang sudah selesai namun belum diberi rating. ' .
+                    'Silakan beri rating terlebih dahulu sebelum bergabung ke kelompok baru.',
+                'error'
+            );
+            return;
+        }
+
         $b = $bookingModel->findByKodeKelompok($kode);
 
         if (!$b) {
@@ -391,7 +432,7 @@ class UserBookingController extends Controller
         $idBooking  = (int)$b['id_bookings'];
         $lastStatus = $bookingModel->getLastStatus($idBooking);
         $now        = date('Y-m-d H:i:s');
-        $activeRes = $rescheduleModel->findActiveRescheduleForBooking($idBooking);
+        $activeRes  = $rescheduleModel->findActiveRescheduleForBooking($idBooking);
 
         if (!$activeRes && !in_array($lastStatus, ['reschedule_pending', 'reschedule_approved'], true)) {
             $draftRes = $rescheduleModel->findLatestByBooking($idBooking);
@@ -486,6 +527,7 @@ class UserBookingController extends Controller
                 "&id_ruangan={$b['id_ruangan']}&id_booking={$idBooking}"
         );
     }
+
 
 
     public function kickMember()

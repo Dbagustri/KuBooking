@@ -71,39 +71,59 @@ class Room extends Model
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    /**
-     * List ruangan untuk admin (dengan search + pagination)
-     */
-    public function getAdminList(int $limit, int $offset, string $search = '')
+    // app/Models/Room.php
+
+    public function getAdminList(int $limit, int $offset, string $search = '', string $status = 'all')
     {
-        $where  = '';
+        $where  = [];
         $params = [];
 
+        // Filter search (nama_ruangan / kategori)
         if ($search !== '') {
-            $where             = "WHERE nama_ruangan LIKE :search OR kategori LIKE :search";
+            $where[]           = "(nama_ruangan LIKE :search OR kategori LIKE :search)";
             $params[':search'] = "%{$search}%";
         }
 
-        // hitung total
-        $sqlCount  = "SELECT COUNT(*) AS total FROM " . self::$table . " {$where}";
+        // Filter status (aktif / nonaktif)
+        if (in_array($status, ['aktif', 'nonaktif'], true)) {
+            $where[]                          = "status_operasional = :status_operasional";
+            $params[':status_operasional']    = $status;
+        }
+
+        $whereSql = '';
+        if (!empty($where)) {
+            $whereSql = 'WHERE ' . implode(' AND ', $where);
+        }
+
+        // Hitung total baris untuk pagination
+        $sqlCount  = "SELECT COUNT(*) AS total FROM " . self::$table . " {$whereSql}";
         $stmtCount = self::$db->prepare($sqlCount);
         $stmtCount->execute($params);
         $totalRows = (int)$stmtCount->fetchColumn();
 
         $totalPages = $totalRows > 0 ? (int)ceil($totalRows / $limit) : 1;
 
-        // ambil data
-        $sql = "SELECT id_ruangan, nama_ruangan, kategori, kapasitas_min, kapasitas_max, status_operasional
-                FROM " . self::$table . "
-                {$where}
-                ORDER BY nama_ruangan ASC
-                LIMIT :limit OFFSET :offset";
+        // Ambil data
+        $sql = "SELECT 
+                id_ruangan, 
+                nama_ruangan, 
+                kategori, 
+                kapasitas_min, 
+                kapasitas_max, 
+                status_operasional,
+                lokasi
+            FROM " . self::$table . "
+            {$whereSql}
+            ORDER BY nama_ruangan ASC
+            LIMIT :limit OFFSET :offset";
 
         $stmt = self::$db->prepare($sql);
 
+        // Bind parameter search/status
         foreach ($params as $key => $val) {
             $stmt->bindValue($key, $val, PDO::PARAM_STR);
         }
+
         $stmt->bindValue(':limit',  $limit,  PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 
@@ -116,9 +136,6 @@ class Room extends Model
         ];
     }
 
-    /**
-     * Ambil fasilitas ruangan (join fasilitas_ruangan + fasilitas)
-     */
     public function getFasilitas($idRuangan)
     {
         $sql = "

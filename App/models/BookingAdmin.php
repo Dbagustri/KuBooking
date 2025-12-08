@@ -42,17 +42,13 @@ class BookingAdmin extends BookingBase
         $stmt = self::$db->prepare($sql);
         $stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
         $stmt->execute();
-
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
         $result = [];
         foreach ($rows as $row) {
             $start = strtotime($row['start_time']);
             $end   = strtotime($row['end_time']);
-
             $tanggalLabel = date('d M', strtotime($row['tanggal']));
             $jamLabel     = date('H:i', $start) . '–' . date('H:i', $end);
-
             $result[] = [
                 'id'        => $row['id_bookings'],
                 'kode'      => $row['booking_code'],
@@ -91,15 +87,12 @@ class BookingAdmin extends BookingBase
         ORDER BY b.tanggal DESC, b.start_time DESC
         LIMIT :limit OFFSET :offset
     ";
-
         $stmt = self::$db->prepare($sql);
         $stmt->bindValue(':limit',  (int)$limit,  PDO::PARAM_INT);
         $stmt->bindValue(':offset', (int)$offset, PDO::PARAM_INT);
         $stmt->execute();
-
         $rows   = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $result = [];
-
         foreach ($rows as $row) {
             $start = strtotime($row['start_time']);
             $end   = strtotime($row['end_time']);
@@ -128,7 +121,6 @@ class BookingAdmin extends BookingBase
 
         return $result;
     }
-
     public function findAdminDetail($idBooking)
     {
         $sql = "
@@ -172,7 +164,6 @@ class BookingAdmin extends BookingBase
         $keperluan   = $data['keperluan'] ?? null;
         $members     = $data['members'] ?? [];
         $pjIdUser    = (int)($data['pj_id_user'] ?? 0);
-
         if (
             !$idRuangan ||
             !$tanggal ||
@@ -183,15 +174,11 @@ class BookingAdmin extends BookingBase
         ) {
             return 0;
         }
-
-        // Hitung start & end time
         $start = $tanggal . ' ' . $jamMulai . ':00';
         $end   = date('Y-m-d H:i:s', strtotime($start . " + {$durasi} hour"));
 
         try {
             self::$db->beginTransaction();
-
-            // Cek bentrok dengan booking lain di ruangan & tanggal yang sama
             $sqlCheck = "
             SELECT COUNT(*) 
             FROM " . self::$table . " b
@@ -216,46 +203,19 @@ class BookingAdmin extends BookingBase
                 return 0;
             }
 
-            // Generate booking_code random
             $bookingCode = substr(str_shuffle('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'), 0, 8);
-
-            // Insert ke tabel Bookings
             $sqlInsert = "
             INSERT INTO " . self::$table . " (
-                id_pj,
-                id_ruangan,
-                booking_code,
-                kode_kelompok,
-                start_time,
-                end_time,
-                jumlah_anggota,
-                is_external,
-                surat_izin,
-                reschedule_request,
-                asal_instansi,
-                tanggal,
-                keperluan,
-                group_expire_at,
-                submitted
+                id_pj,id_ruangan,booking_code,
+                kode_kelompok,start_time,end_time,
+                jumlah_anggota,is_external,surat_izin,
+                reschedule_request,asal_instansi,tanggal,
+                keperluan,group_expire_at,submitted
             ) VALUES (
-                :id_pj,
-                :id_ruangan,
-                :booking_code,
-                NULL,
-                :start_time,
-                :end_time,
-                :jumlah_anggota,
-                0,
-                NULL,
-                0,
-                NULL,
-                :tanggal,
-                :keperluan,
-                NULL,
-                1
+                :id_pj,:id_ruangan,:booking_code,NULL,:start_time,:end_time,
+                :jumlah_anggota,0,NULL,0,NULL,:tanggal,:keperluan,NULL,1
             )
         ";
-
             $stmtInsert = self::$db->prepare($sqlInsert);
             $stmtInsert->execute([
                 'id_pj'          => $pjIdUser,
@@ -269,14 +229,11 @@ class BookingAdmin extends BookingBase
             ]);
 
             $idBooking = (int)self::$db->lastInsertId();
-
-            // Insert anggota ke Booking_member
             $sqlMember = "
             INSERT INTO Booking_member (id_bookings, id_user)
             VALUES (:id_bookings, :id_user)
         ";
             $stmtMember = self::$db->prepare($sqlMember);
-
             foreach ($members as $uid) {
                 if (!ctype_digit((string)$uid)) {
                     continue;
@@ -286,8 +243,6 @@ class BookingAdmin extends BookingBase
                     'id_user'     => (int)$uid,
                 ]);
             }
-
-            // Tambah status langsung approved (karena booking internal)
             $this->addStatus($idBooking, 'approved');
 
             self::$db->commit();
@@ -296,7 +251,6 @@ class BookingAdmin extends BookingBase
             if (self::$db->inTransaction()) {
                 self::$db->rollBack();
             }
-            // Bisa kamu log kalau punya logger
             return 0;
         }
     }
@@ -306,7 +260,7 @@ class BookingAdmin extends BookingBase
     {
         $idRuangan  = (int)($data['id_ruangan'] ?? 0);
         $tanggal    = $data['tanggal'] ?? null;
-        $jamMulai   = $data['jam_mulai'] ?? null;
+        $jamMulai   = $data['jam_mulai'] ?? null; // HH:MM
         $durasi     = (int)($data['durasi'] ?? 0);
         $jml        = (int)($data['jumlah_anggota'] ?? 1);
         $keperluan  = $data['keperluan'] ?? null;
@@ -316,42 +270,61 @@ class BookingAdmin extends BookingBase
         $asal       = $data['asal_instansi'] ?? null;
         $surat      = $data['surat_izin'] ?? null;
 
+        // Validasi dasar
         if (!$idRuangan || !$tanggal || !$jamMulai || !$durasi || !$guestName) {
             return false;
         }
+
+        // Durasi 1–3 jam
         if ($durasi < 1 || $durasi > 3) {
             return false;
         }
+
+        // Cek ruangan
         $roomModel = new \App\Models\Room();
         $room      = $roomModel->findById($idRuangan);
         if (!$room) {
             return false;
         }
+
         $kapMin = (int)($room['kapasitas_min'] ?? 0);
         $kapMax = (int)($room['kapasitas_max'] ?? 0);
+
+        if ($jml <= 0) {
+            $jml = 1;
+        }
+
+        // Kapasitas: harus di antara kapMin dan kapMax (jika diset)
         if ($kapMax > 0) {
-            if ($jml < $kapMin || $jml > $kapMax) {
+            if (($kapMin > 0 && $jml < $kapMin) || $jml > $kapMax) {
                 return false;
             }
+        } elseif ($kapMin > 0 && $jml < $kapMin) {
+            return false;
         }
+
         $start = $tanggal . ' ' . $jamMulai . ':00';
         $end   = date('Y-m-d H:i:s', strtotime("$start +{$durasi} hour"));
+
+        // Cek bentrok
         if ($this->isBentrok($idRuangan, $start, $end)) {
             return false;
         }
+
         $kode = $this->generateBookingCode();
+
         $sql = "INSERT INTO " . self::$table . "
-                (id_pj, id_ruangan, booking_code,
-                 start_time, end_time, jumlah_anggota,
-                 is_external, guest_name, guest_email, guest_phone,
-                 asal_instansi, surat_izin,
-                 tanggal, keperluan, submitted)
-                VALUES
-                (NULL, :id_ruangan, :booking_code,
-                 :start_time, :end_time, :jumlah_anggota,
-                 1, :guest_name, :guest_email, :guest_phone,
-                 :asal_instansi, :surat_izin,
-                 :tanggal, :keperluan, 1)";
+            (id_pj, id_ruangan, booking_code,
+             start_time, end_time, jumlah_anggota,
+             is_external, guest_name, guest_email, guest_phone,
+             asal_instansi, surat_izin,
+             tanggal, keperluan, submitted)
+            VALUES
+            (NULL, :id_ruangan, :booking_code,
+             :start_time, :end_time, :jumlah_anggota,
+             1, :guest_name, :guest_email, :guest_phone,
+             :asal_instansi, :surat_izin,
+             :tanggal, :keperluan, 1)";
 
         $stmt = self::$db->prepare($sql);
         $stmt->execute([
@@ -370,101 +343,66 @@ class BookingAdmin extends BookingBase
         ]);
 
         $idBooking = self::$db->lastInsertId();
-        $this->addStatus($idBooking, 'pending');
+
+        // Status awal: pending
+        $this->addStatus($idBooking, 'approved');
+
         return $idBooking;
     }
-    public function updateAdminBooking(array $data)
+
+
+    public function updateAdminBooking(array $data, array $memberIds = []): bool
     {
-        $idBooking = (int)($data['id_booking'] ?? 0);
-        if (!$idBooking) return false;
-        $booking = $this->findWithRoom($idBooking);
-        if (!$booking) return false;
+        self::$db->beginTransaction();
 
-        $idRuangan  = (int)($data['id_ruangan'] ?? $booking['id_ruangan']);
-        $tanggal    = $data['tanggal']   ?? $booking['tanggal'];
-        $jamMulai   = $data['jam_mulai'] ?? date('H:i', strtotime($booking['start_time']));
-        $durasi     = (int)($data['durasi'] ?? 1);
-        $jml        = (int)($data['jumlah_anggota'] ?? $booking['jumlah_anggota']);
-        $keperluan  = $data['keperluan'] ?? $booking['keperluan'];
+        try {
+            $sql = "UPDATE bookings
+                SET id_ruangan = :id_ruangan,
+                    start_time = :start_time,
+                    end_time   = :end_time,
+                    tanggal    = :tanggal,
+                    jumlah_anggota = :jumlah_anggota,
+                    keperluan  = :keperluan
+                WHERE id_bookings = :id_booking";
 
-        if ($durasi < 1 || $durasi > 3) {
+            $start = $data['tanggal'] . ' ' . $data['jam_mulai'] . ':00';
+            $end   = date('Y-m-d H:i:s', strtotime($start . " + {$data['durasi']} hour"));
+
+            $stmt = self::$db->prepare($sql);
+            $stmt->execute([
+                'id_ruangan'      => (int)$data['id_ruangan'],
+                'start_time'      => $start,
+                'end_time'        => $end,
+                'tanggal'         => $data['tanggal'],
+                'jumlah_anggota'  => (int)$data['jumlah_anggota'],
+                'keperluan'       => $data['keperluan'],
+                'id_booking'      => (int)$data['id_booking'],
+            ]);
+            if (!empty($memberIds)) {
+                $idBooking = (int)$data['id_booking'];
+                $del = self::$db->prepare("DELETE FROM Booking_member WHERE id_bookings = :id");
+                $del->execute(['id' => $idBooking]);
+                $ins = self::$db->prepare("
+                INSERT INTO Booking_member (id_bookings, id_user) 
+                VALUES (:id_bookings, :id_user)
+            ");
+
+                foreach ($memberIds as $uid) {
+                    $ins->execute([
+                        'id_bookings' => $idBooking,
+                        'id_user'     => (int)$uid,
+                    ]);
+                }
+            }
+
+            self::$db->commit();
+            return true;
+        } catch (\Throwable $e) {
+            self::$db->rollBack();
             return false;
         }
-        if ($idRuangan === (int)$booking['id_ruangan']) {
-            $kapMin = (int)($booking['kapasitas_min'] ?? 0);
-            $kapMax = (int)($booking['kapasitas_max'] ?? 0);
-        } else {
-            $roomModel = new \App\Models\Room();
-            $room      = $roomModel->findById($idRuangan);
-            if (!$room) {
-                return false;
-            }
-            $kapMin = (int)($room['kapasitas_min'] ?? 0);
-            $kapMax = (int)($room['kapasitas_max'] ?? 0);
-        }
-        if ($kapMax > 0) {
-            if ($jml < $kapMin || $jml > $kapMax) {
-                return false;
-            }
-        }
-
-        $start = $tanggal . ' ' . $jamMulai . ':00';
-        $end   = date('Y-m-d H:i:s', strtotime("$start +{$durasi} hour"));
-
-        if ($this->isBentrokExcept($idRuangan, $start, $end, $idBooking)) {
-            return false;
-        }
-        if ((int)$booking['is_external'] === 1) {
-            $guestName  = $data['guest_name']  ?? $booking['guest_name'];
-            $guestEmail = $data['guest_email'] ?? $booking['guest_email'];
-            $guestPhone = $data['guest_phone'] ?? $booking['guest_phone'];
-            $asal       = $data['asal_instansi'] ?? $booking['asal_instansi'];
-            $surat      = $data['surat_izin'] ?? $booking['surat_izin'];
-            $sql = "UPDATE " . self::$table . "
-                SET id_ruangan   = :id_ruangan,
-                    start_time   = :start_time,
-                    end_time     = :end_time,
-                    jumlah_anggota = :jumlah_anggota,
-                    tanggal      = :tanggal,
-                    keperluan    = :keperluan,
-                    guest_name   = :guest_name,
-                    guest_email  = :guest_email,
-                    guest_phone  = :guest_phone,
-                    asal_instansi = :asal_instansi,
-                    surat_izin    = :surat_izin
-                WHERE id_bookings = :id";
-            $paramsExtra = [
-                'guest_name'    => $guestName,
-                'guest_email'   => $guestEmail,
-                'guest_phone'   => $guestPhone,
-                'asal_instansi' => $asal,
-                'surat_izin'    => $surat,
-            ];
-        } else {
-            $sql = "UPDATE " . self::$table . "
-                SET id_ruangan   = :id_ruangan,
-                    start_time   = :start_time,
-                    end_time     = :end_time,
-                    jumlah_anggota = :jumlah_anggota,
-                    tanggal      = :tanggal,
-                    keperluan    = :keperluan
-                WHERE id_bookings = :id";
-            $paramsExtra = [];
-        }
-
-        $params = array_merge([
-            'id'             => $idBooking,
-            'id_ruangan'     => $idRuangan,
-            'start_time'     => $start,
-            'end_time'       => $end,
-            'jumlah_anggota' => $jml,
-            'tanggal'        => $tanggal,
-            'keperluan'      => $keperluan,
-        ], $paramsExtra);
-
-        $stmt = self::$db->prepare($sql);
-        return $stmt->execute($params);
     }
+
     public function autoCancelLateArrivals()
     {
         $sql = "
@@ -699,16 +637,9 @@ class BookingAdmin extends BookingBase
         $totalPages = $totalRows > 0 ? (int)ceil($totalRows / $limit) : 1;
         $sql = "
         SELECT 
-            b.id_bookings,
-            b.booking_code,
-            b.jumlah_anggota,
-            b.start_time,
-            b.end_time,
-            b.tanggal,
-            r.nama_ruangan,
-            r.kapasitas_max,
-            acc.nama AS pj_nama,
-            bs.status
+            b.id_bookings,b.booking_code,b.jumlah_anggota,
+            b.start_time,b.end_time,b.tanggal,r.nama_ruangan,
+            r.kapasitas_max,acc.nama AS pj_nama,bs.status
         FROM " . self::$table . " b
         LEFT JOIN Account acc ON b.id_pj = acc.id_account
         LEFT JOIN Ruangan r ON b.id_ruangan = r.id_ruangan

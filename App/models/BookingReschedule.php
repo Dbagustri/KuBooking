@@ -164,10 +164,6 @@ class BookingReschedule extends Model
         }
     }
 
-    /**
-     * Ambil detail reschedule + info booking & ruangan.
-     * Dipakai di halaman reschedule user / admin.
-     */
     public function findWithBooking(int $idReschedule): ?array
     {
         $sql = "SELECT 
@@ -195,9 +191,6 @@ class BookingReschedule extends Model
         return $row ?: null;
     }
 
-    /**
-     * Ambil anggota dari draft reschedule.
-     */
     public function getMembers(int $idReschedule): array
     {
         $sql = "SELECT 
@@ -213,10 +206,6 @@ class BookingReschedule extends Model
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    /**
-     * Copy semua anggota dari Booking_member → Booking_reschedule_member.
-     * (opsional kalau mau dipakai dari luar)
-     */
     public function copyMembersFromBooking(int $idReschedule, int $idBooking): void
     {
         $sql = "INSERT IGNORE INTO Booking_reschedule_member (id_reschedule, id_user)

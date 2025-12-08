@@ -21,18 +21,13 @@ class AdminBookingController extends Controller
         $bookingModel = new BookingAdmin();
         $bookingModel->autoCancelLateBookings();
 
-        // PAGINATION
         $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
         if ($page < 1) $page = 1;
 
         $limit  = 5;
         $offset = ($page - 1) * $limit;
-
-        // hitung total data booking (untuk pagination)
-        $totalRows   = $bookingModel->countAllForAdmin();   // <-- method baru di model
+        $totalRows   = $bookingModel->countAllForAdmin();
         $totalPages  = $totalRows > 0 ? (int)ceil($totalRows / $limit) : 1;
-
-        // ambil data halaman ini
         $bookings = $bookingModel->getAllForAdmin($limit, $offset);
 
         $this->view('admin/kelolabooking', [
@@ -82,27 +77,22 @@ class AdminBookingController extends Controller
         $roomModel      = new Room();
         $rooms          = $roomModel->getAllActive();
         $bookingModel   = new BookingAdmin();
-        $accountModel   = new \App\Models\Account();
-        $bookingUser    = new \App\Models\BookingUser();
+        $accountModel   = new Account();
+        $bookingUser    = new BookingUser();
 
-        // GET → tampilkan form
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->view('admin/booking-form-internal', [
                 'rooms' => $rooms,
             ]);
             return;
         }
-
-        // POST → proses simpan
         $idRuangan  = $this->input('id_ruangan');
-        $tanggal    = $this->input('tanggal');        // format YYYY-mm-dd
-        $jamMulai   = $this->input('jam_mulai');      // HH:ii
-        $durasi     = (int)$this->input('durasi');    // jam
+        $tanggal    = $this->input('tanggal');
+        $jamMulai   = $this->input('jam_mulai');
+        $durasi     = (int)$this->input('durasi');
         $keperluan  = $this->input('keperluan');
-        $members    = $_POST['members'] ?? [];        // array id_account dari form
-        $pjIdInput  = $this->input('pj_id_user');     // boleh kosong, akan diverifikasi lagi
-
-        // Validasi dasar
+        $members    = $_POST['members'] ?? [];
+        $pjIdInput  = $this->input('pj_id_user');
         if (
             !$idRuangan ||
             !$tanggal ||
@@ -116,8 +106,6 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-
-        // Minimal 1 anggota
         if (empty($members) || !is_array($members)) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=createInternal',
@@ -125,8 +113,6 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-
-        // Cek ruangan
         $room = $roomModel->findById((int)$idRuangan);
         if (!$room) {
             return $this->redirectWithMessage(
@@ -138,8 +124,6 @@ class AdminBookingController extends Controller
 
         $kapasitasMin = (int)($room['kapasitas_min'] ?? 0);
         $kapasitasMax = (int)($room['kapasitas_max'] ?? 0);
-
-        // Normalisasi & validasi member (id_account)
         $validMembers = [];
         foreach ($members as $mid) {
             if (!ctype_digit((string)$mid)) {
@@ -154,8 +138,6 @@ class AdminBookingController extends Controller
                     'error'
                 );
             }
-
-            // Pastikan user ini tidak punya booking aktif
             $active = $bookingUser->getActiveBookingForUser($mid);
             if ($active) {
                 return $this->redirectWithMessage(
@@ -177,8 +159,6 @@ class AdminBookingController extends Controller
         }
 
         $jumlahAnggota = count($validMembers);
-
-        // Cek kapasitas ruangan
         if ($kapasitasMin > 0 && $jumlahAnggota < $kapasitasMin) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=createInternal',
@@ -195,13 +175,11 @@ class AdminBookingController extends Controller
             );
         }
 
-        // Tentukan PJ: harus salah satu dari anggota, kalau input tidak valid → pakai anggota pertama
         $pjIdUser = (int)($pjIdInput ?? 0);
         if (!$pjIdUser || !in_array($pjIdUser, $validMembers, true)) {
             $pjIdUser = $validMembers[0];
         }
 
-        // Siapkan data untuk model
         $data = [
             'id_ruangan'   => (int)$idRuangan,
             'tanggal'      => $tanggal,
@@ -239,20 +217,30 @@ class AdminBookingController extends Controller
         $bookingModel = new BookingAdmin();
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+            // --- Ambil input dasar ---
             $idRuangan     = $this->input('id_ruangan');
             $tanggal       = $this->input('tanggal');
             $jamMulai      = $this->input('jam_mulai');
-            $durasi        = (int)$this->input('durasi');
-            $jumlahAnggota = (int)$this->input('jumlah_anggota');
+            $durasi        = (int) $this->input('durasi');
+            $jumlahAnggota = (int) $this->input('jumlah_anggota');
             $keperluan     = $this->input('keperluan');
 
-            $guestName     = $this->input('guest_name');
-            $guestEmail    = $this->input('guest_email');
-            $guestPhone    = $this->input('guest_phone');
-            $asalInstansi  = $this->input('asal_instansi');
-            $suratIzin     = $this->input('surat_izin'); // path file / nama file
+            // Support nama field dari view: guest_name atau nama_peminjam
+            $guestName  = $this->input('guest_name')  ?: $this->input('nama_peminjam');
+            $guestEmail = $this->input('guest_email') ?: $this->input('email_peminjam');
+            $guestPhone = $this->input('guest_phone') ?: $this->input('no_hp');
 
-            if (!$idRuangan || !$tanggal || !$jamMulai || $durasi <= 0 || !$guestName) {
+            $asalInstansi = $this->input('asal_instansi');
+
+            // --- Validasi dasar field wajib ---
+            if (
+                !$idRuangan ||
+                !$tanggal ||
+                !$jamMulai ||
+                $durasi <= 0 ||
+                !$guestName
+            ) {
                 return $this->redirectWithMessage(
                     'index.php?controller=adminBooking&action=createExternal',
                     'Field wajib (ruangan, tanggal, jam, durasi, nama peminjam) harus diisi.',
@@ -260,40 +248,186 @@ class AdminBookingController extends Controller
                 );
             }
 
+            // --- Validasi ruangan ada ---
+            if (!ctype_digit((string)$idRuangan)) {
+                return $this->redirectWithMessage(
+                    'index.php?controller=adminBooking&action=createExternal',
+                    'ID ruangan tidak valid.',
+                    'error'
+                );
+            }
+
+            $ruangan = $roomModel->findById((int)$idRuangan);
+            if (!$ruangan || ($ruangan['status_operasional'] ?? '') !== 'aktif') {
+                return $this->redirectWithMessage(
+                    'index.php?controller=adminBooking&action=createExternal',
+                    'Ruangan tidak ditemukan atau tidak aktif.',
+                    'error'
+                );
+            }
+
+            // --- Validasi tanggal (format & tidak lewat) ---
+            $today = date('Y-m-d');
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $tanggal) || $tanggal < $today) {
+                return $this->redirectWithMessage(
+                    'index.php?controller=adminBooking&action=createExternal',
+                    'Tanggal peminjaman tidak valid atau sudah lewat.',
+                    'error'
+                );
+            }
+
+            // --- Validasi jam & durasi ---
+            if (!preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $jamMulai)) {
+                return $this->redirectWithMessage(
+                    'index.php?controller=adminBooking&action=createExternal',
+                    'Format jam mulai tidak valid.',
+                    'error'
+                );
+            }
+
+            // durasi 1–3 jam
+            if ($durasi < 1 || $durasi > 3) {
+                return $this->redirectWithMessage(
+                    'index.php?controller=adminBooking&action=createExternal',
+                    'Durasi peminjaman tidak valid (harus 1–3 jam).',
+                    'error'
+                );
+            }
+
+            // Hitung start/end time untuk validasi jam sekarang (opsional)
+            $startDateTime = \DateTime::createFromFormat('Y-m-d H:i', $tanggal . ' ' . substr($jamMulai, 0, 5));
+            if (!$startDateTime) {
+                return $this->redirectWithMessage(
+                    'index.php?controller=adminBooking&action=createExternal',
+                    'Kombinasi tanggal & jam mulai tidak valid.',
+                    'error'
+                );
+            }
+            $endDateTime = clone $startDateTime;
+            $endDateTime->modify('+' . $durasi . ' hour');
+
+            // Kalau tanggal hari ini, jam mulai tidak boleh di masa lalu
+            $now = new \DateTime();
+            if ($tanggal === $today && $startDateTime <= $now) {
+                return $this->redirectWithMessage(
+                    'index.php?controller=adminBooking&action=createExternal',
+                    'Jam mulai sudah lewat dari waktu sekarang.',
+                    'error'
+                );
+            }
+
+            // --- Validasi kapasitas vs jumlah anggota ---
+            $kapMin = (int)($ruangan['kapasitas_min'] ?? 0);
+            $kapMax = (int)($ruangan['kapasitas_max'] ?? 0);
+
+            if ($jumlahAnggota <= 0) {
+                $jumlahAnggota = 1;
+            }
+
+            if ($kapMin > 0 && $jumlahAnggota < $kapMin) {
+                return $this->redirectWithMessage(
+                    'index.php?controller=adminBooking&action=createExternal',
+                    'Jumlah anggota kurang dari kapasitas minimum ruangan.',
+                    'error'
+                );
+            }
+
+            if ($kapMax > 0 && $jumlahAnggota > $kapMax) {
+                return $this->redirectWithMessage(
+                    'index.php?controller=adminBooking&action=createExternal',
+                    'Jumlah anggota melebihi kapasitas maksimum ruangan.',
+                    'error'
+                );
+            }
+
+            // --- Upload surat izin (opsional) ---
+            $suratIzinPath = null;
+            if (!empty($_FILES['surat_izin']) && $_FILES['surat_izin']['error'] !== UPLOAD_ERR_NO_FILE) {
+                if ($_FILES['surat_izin']['error'] !== UPLOAD_ERR_OK) {
+                    return $this->redirectWithMessage(
+                        'index.php?controller=adminBooking&action=createExternal',
+                        'Gagal mengunggah surat izin.',
+                        'error'
+                    );
+                }
+
+                $ext     = strtolower(pathinfo($_FILES['surat_izin']['name'], PATHINFO_EXTENSION));
+                $allowed = ['pdf', 'jpg', 'jpeg', 'png'];
+
+                if (!in_array($ext, $allowed, true)) {
+                    return $this->redirectWithMessage(
+                        'index.php?controller=adminBooking&action=createExternal',
+                        'Surat izin harus berupa PDF atau gambar (JPG/PNG).',
+                        'error'
+                    );
+                }
+
+                if ($_FILES['surat_izin']['size'] > 5 * 1024 * 1024) { // 5 MB
+                    return $this->redirectWithMessage(
+                        'index.php?controller=adminBooking&action=createExternal',
+                        'Ukuran file surat izin maksimal 5MB.',
+                        'error'
+                    );
+                }
+
+                $uploadDir = __DIR__ . '/../../public/uploads/surat_izin/';
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0777, true);
+                }
+
+                $safeName = preg_replace('/[^a-z0-9\.\-_]/i', '', $_FILES['surat_izin']['name']);
+                $filename = time() . '_' . $safeName;
+                $target   = $uploadDir . $filename;
+
+                if (!move_uploaded_file($_FILES['surat_izin']['tmp_name'], $target)) {
+                    return $this->redirectWithMessage(
+                        'index.php?controller=adminBooking&action=createExternal',
+                        'Gagal menyimpan file surat izin di server.',
+                        'error'
+                    );
+                }
+
+                $suratIzinPath = 'uploads/surat_izin/' . $filename;
+            }
+
+            // --- Siapkan data untuk model ---
             $data = [
-                'id_ruangan'      => (int)$idRuangan,
+                'id_ruangan'      => (int) $idRuangan,
                 'tanggal'         => $tanggal,
-                'jam_mulai'       => $jamMulai,
+                'jam_mulai'       => substr($jamMulai, 0, 5), // simpan HH:MM
                 'durasi'          => $durasi,
-                'jumlah_anggota'  => $jumlahAnggota > 0 ? $jumlahAnggota : 1,
+                'jumlah_anggota'  => $jumlahAnggota,
                 'keperluan'       => $keperluan,
                 'guest_name'      => $guestName,
                 'guest_email'     => $guestEmail,
                 'guest_phone'     => $guestPhone,
                 'asal_instansi'   => $asalInstansi,
-                'surat_izin'      => $suratIzin,
+                'surat_izin'      => $suratIzinPath,
             ];
 
+            // Model createExternalBooking cek bentrok + kapasitas + set status pending
             $idBooking = $bookingModel->createExternalBooking($data);
 
             if (!$idBooking) {
                 return $this->redirectWithMessage(
                     'index.php?controller=adminBooking&action=createExternal',
-                    'Gagal membuat booking eksternal. Cek kembali jadwal (kemungkinan bentrok).',
+                    'Gagal membuat booking eksternal. Cek kembali jadwal (kemungkinan bentrok) atau kapasitas.',
                     'error'
                 );
             }
 
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=manage',
-                'Booking eksternal berhasil dibuat.'
+                'Booking eksternal berhasil dibuat (status pending).'
             );
         }
 
-        $this->view('admin/booking-form-external', [
+        $this->view('admin/booking-eksternal', [
             'rooms' => $rooms,
         ]);
     }
+
+
 
     public function edit()
     {
@@ -319,6 +453,7 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
+        $members = $bookingModel->getMembers((int)$id);
 
         $rooms = $roomModel->getAllActive();
 
@@ -330,24 +465,19 @@ class AdminBookingController extends Controller
             $jumlahAnggota = (int)$this->input('jumlah_anggota');
             $keperluan     = $this->input('keperluan');
 
+            $memberIds = array_map('intval', $_POST['members'] ?? []);
+
             $dataUpdate = [
                 'id_booking'      => (int)$id,
                 'id_ruangan'      => $idRuangan ?: $booking['id_ruangan'],
                 'tanggal'         => $tanggal ?: $booking['tanggal'],
                 'jam_mulai'       => $jamMulai ?: date('H:i', strtotime($booking['start_time'])),
                 'durasi'          => $durasi > 0 ? $durasi : 1,
-                'jumlah_anggota'  => $jumlahAnggota > 0 ? $jumlahAnggota : (int)$booking['jumlah_anggota'],
+                'jumlah_anggota'  => max(1, $jumlahAnggota),
                 'keperluan'       => $keperluan !== null ? $keperluan : $booking['keperluan'],
             ];
-            if ((int)$booking['is_external'] === 1) {
-                $dataUpdate['guest_name']     = $this->input('guest_name')     ?: $booking['guest_name'];
-                $dataUpdate['guest_email']    = $this->input('guest_email')    ?: $booking['guest_email'];
-                $dataUpdate['guest_phone']    = $this->input('guest_phone')    ?: $booking['guest_phone'];
-                $dataUpdate['asal_instansi']  = $this->input('asal_instansi')  ?: $booking['asal_instansi'];
-                $dataUpdate['surat_izin']     = $this->input('surat_izin')     ?: $booking['surat_izin'];
-            }
 
-            $ok = $bookingModel->updateAdminBooking($dataUpdate);
+            $ok = $bookingModel->updateAdminBooking($dataUpdate, $memberIds);
 
             if (!$ok) {
                 return $this->redirectWithMessage(
@@ -366,8 +496,10 @@ class AdminBookingController extends Controller
         $this->view('admin/booking-edit', [
             'booking' => $booking,
             'rooms'   => $rooms,
+            'members' => $members,
         ]);
     }
+
 
     public function delete()
     {
@@ -579,7 +711,6 @@ class AdminBookingController extends Controller
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $tanggal = $this->input('tanggal');
 
-            // Validasi sederhana format YYYY-mm-dd
             if (!$tanggal || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $tanggal)) {
                 return $this->redirectWithMessage(
                     'index.php?controller=adminBooking&action=closeDate',
@@ -596,11 +727,7 @@ class AdminBookingController extends Controller
                 "Penutupan perpustakaan berhasil. {$count} booking pada tanggal {$tanggal} dibatalkan."
             );
         }
-
-        // GET → tampilkan form pilih tanggal
-        $this->view('admin/close-date', [
-            // bisa kirim data tambahan kalau perlu
-        ]);
+        $this->view('admin/close-date', []);
     }
 
     public function processReschedule()
@@ -685,8 +812,6 @@ class AdminBookingController extends Controller
             );
             return;
         }
-
-        // Kalau di result ada id_booking, bisa arahkan ke detail booking tersebut
         $idBooking = $result['id_booking'] ?? null;
         $targetUrl = $idBooking
             ? 'index.php?controller=adminBooking&action=detail&id=' . (int)$idBooking

@@ -20,17 +20,11 @@ class AdminController extends Controller
         $accountModel    = new Account();
         $bookingModel    = new BookingAdmin();
         $roomModel       = new Room();
-
-        // ==== Statistik kartu atas ====
         $verifikasi_hari_ini    = $registrasiModel->countPendingToday();
         $booking_hari_ini       = $bookingModel->countToday();
         $ruang_kosong_hari_ini  = $roomModel->countActive();
         $user_aktif             = $accountModel->countActive();
-
-        // ==== Pagination & tab ====
         $activeTab = $_GET['tab'] ?? 'booking';
-
-        // Booking pending (pagination)
         $booking_page = isset($_GET['booking_page']) ? (int)$_GET['booking_page'] : 1;
         if ($booking_page < 1) $booking_page = 1;
 
@@ -38,12 +32,8 @@ class AdminController extends Controller
         $bookingResult = $bookingModel->getPendingWithPagination($booking_page, $bookingLimit);
         $booking_pending     = $bookingResult['list'];
         $booking_total_pages = $bookingResult['total_pages'];
-
-        // User pending (pakai Registrasi::getPendingUsers)
         $user_page = isset($_GET['user_page']) ? (int)$_GET['user_page'] : 1;
         if ($user_page < 1) $user_page = 1;
-
-        // filter = 'pending' supaya hanya status pending
         $userResult = $registrasiModel->getPendingUsers($user_page, 'pending', '');
         $user_pending     = $userResult['list'];
         $user_total_pages = $userResult['total_pages'];
@@ -158,8 +148,6 @@ class AdminController extends Controller
                 'aktif_sampai' => $aktif_sampai,
             ];
         }
-
-        // Dosen & tendik
         $angkatan        = $nowYear;
         $durasi          = 40;
         $aktifSampaiYear = $angkatan + $durasi;
@@ -177,15 +165,28 @@ class AdminController extends Controller
         Auth::requireRole(['admin', 'super_admin']);
 
         $model = new Registrasi();
+        $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+        if ($page < 1) $page = 1;
 
-        $page   = $_GET['page']  ?? 1;
-        $filter = $_GET['filter'] ?? '';
-        $search = $_GET['q']      ?? '';
+        $mode = $_GET['mode'] ?? null;
+        $filter = '';
+        $search = '';
+
+        if ($mode === 'filter') {
+            $filter = $_GET['filter'] ?? '';
+        } elseif ($mode === 'search') {
+            $search = $_GET['q'] ?? '';
+        } else {
+            $filter = 'pending';
+        }
 
         $data = $model->getPendingUsers($page, $filter, $search);
 
         $this->view('admin/verifikasiuser', $data);
     }
+
+
+    // app/Controllers/AdminController.php
 
     public function ruangan()
     {
@@ -193,24 +194,29 @@ class AdminController extends Controller
 
         $roomModel = new Room();
 
-        $page   = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+        $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
         if ($page < 1) {
             $page = 1;
         }
+
         $search = $_GET['q'] ?? '';
+        $status = $_GET['status'] ?? 'all';
 
         $perPage = 20;
         $offset  = ($page - 1) * $perPage;
-
-        $result = $roomModel->getAdminList($perPage, $offset, $search);
+        $result = $roomModel->getAdminList($perPage, $offset, $search, $status);
+        $anyActive = $roomModel->anyActive();
 
         $this->view('admin/kelolaruangan', [
             'rooms'        => $result['data'],
             'current_page' => $page,
             'total_pages'  => $result['total_pages'],
             'search'       => $search,
+            'status'       => $status,
+            'anyActive'    => $anyActive,
         ]);
     }
+
 
     public function anggota()
     {
@@ -221,10 +227,8 @@ class AdminController extends Controller
 
         $filter = $_GET['filter'] ?? '';
         $search = $_GET['q'] ?? '';
-
         $model = new Account();
         $data  = $model->getAdminUserList($page, $filter, $search);
-        // $data diharapkan berisi: users, current_page, total_pages, filter, search
 
         $this->view('admin/kelolaanggota', $data);
     }
@@ -233,24 +237,24 @@ class AdminController extends Controller
     {
         Auth::requireRole(['admin', 'super_admin']);
 
-        $range      = $_GET['range'] ?? 'month';
-        $roomsPage  = isset($_GET['rooms_page'])   ? (int)$_GET['rooms_page']   : 1;
-        $prodiPage  = isset($_GET['prodi_page'])   ? (int)$_GET['prodi_page']   : 1;
-        $ratingPage = isset($_GET['rating_page'])  ? (int)$_GET['rating_page']  : 1;
+        $range = $_GET['range'] ?? 'month';
 
         $laporanModel = new Laporan();
 
-        $rooms = $laporanModel->getSummaryRuangan($range, $roomsPage);
-        // $prodi  = $laporanModel->getSummaryProdi($range, $prodiPage);
-        // $rating = $laporanModel->getSummaryRating($range, $ratingPage);
+        $rooms   = $laporanModel->getRuangan($range);
+        $prodi   = $laporanModel->getProdi($range);
+        $jurusan = $laporanModel->getJurusan($range);
+        $rating  = $laporanModel->getRating($range);
 
         $this->view('admin/laporan', [
             'range'              => $range,
-            'summary_rooms'      => $rooms['data'],
-            'rooms_page'         => $roomsPage,
-            'rooms_total_pages'  => $rooms['total_pages'],
+            'summary_rooms'      => $rooms,
+            'summary_prodi'      => $prodi,
+            'summary_jurusan'    => $jurusan,
+            'summary_rating'     => $rating,
         ]);
     }
+
 
     public function editUser()
     {
@@ -277,16 +281,12 @@ class AdminController extends Controller
             );
             return;
         }
-
-        // GET → tampilkan form
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->view('admin/edituser', [
                 'user' => $user,
             ]);
             return;
         }
-
-        // POST → proses update
         $nama   = trim($this->input('nama'));
         $email  = trim($this->input('email'));
         $status = $this->input('status_aktif') ?? $user['status_aktif'];
@@ -324,16 +324,12 @@ class AdminController extends Controller
         );
     }
 
-
-    /**
-     * Aktif / nonaktif satu ruangan
-     */
     public function setRoomStatus()
     {
         Auth::requireRole(['admin', 'super_admin']);
 
         $idRuangan = $this->input('id_ruangan');
-        $status    = $this->input('status'); // 'aktif' atau 'nonaktif'
+        $status    = $this->input('status');
 
         if (!$idRuangan || !ctype_digit((string)$idRuangan)) {
             $this->redirectWithMessage(
@@ -356,7 +352,6 @@ class AdminController extends Controller
         $roomModel = new Room();
         $id        = (int)$idRuangan;
 
-        // Kalau mau NONAKTIFKAN, cek dulu apakah masih ada booking aktif
         if ($status === 'nonaktif' && $roomModel->hasActiveBookings($id)) {
             $this->redirectWithMessage(
                 'index.php?controller=admin&action=ruangan',
@@ -376,17 +371,11 @@ class AdminController extends Controller
             'success'
         );
     }
-
-    /**
-     * Nonaktifkan semua ruangan sekaligus
-     */
     public function deactivateAllRooms()
     {
         Auth::requireRole(['admin', 'super_admin']);
 
         $roomModel = new Room();
-
-        // Cek apakah masih ada booking aktif di ruangan manapun
         if ($roomModel->hasAnyActiveBookings()) {
             $this->redirectWithMessage(
                 'index.php?controller=admin&action=ruangan',
@@ -405,9 +394,6 @@ class AdminController extends Controller
         );
     }
 
-    /**
-     * Aktif/nonaktif user (dipanggil dari kelolaanggota)
-     */
     public function setUserStatus()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -432,8 +418,6 @@ class AdminController extends Controller
             );
             return;
         }
-
-        // Jangan biarkan admin menonaktifkan dirinya sendiri
         $current = Auth::user();
         if (!empty($current['id_account']) && (int)$current['id_account'] === $idUser && $status === 'nonaktif') {
             $this->redirectWithMessage(
@@ -463,9 +447,6 @@ class AdminController extends Controller
         );
     }
 
-    /**
-     * Hapus user (dipanggil dari kelolaanggota)
-     */
     public function deleteUser()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -514,8 +495,6 @@ class AdminController extends Controller
         Auth::requireRole(['admin', 'super_admin']);
 
         $roomModel = new Room();
-
-        // kalau masih ada ruangan aktif → matikan semua
         if ($roomModel->anyActive()) {
             $roomModel->setAllStatus('nonaktif');
             $this->redirectWithMessage(
@@ -523,7 +502,6 @@ class AdminController extends Controller
                 'Semua ruangan telah dinonaktifkan.'
             );
         } else {
-            // kalau tidak ada yang aktif → aktifkan semua
             $roomModel->setAllStatus('aktif');
             $this->redirectWithMessage(
                 'index.php?controller=admin&action=ruangan',
@@ -713,6 +691,38 @@ class AdminController extends Controller
 
         $this->view('admin/detailuser', [
             'user' => $user,
+        ]);
+    }
+    // di AdminController
+
+    public function detailRegistrasi()
+    {
+        Auth::requireRole(['admin', 'super_admin']);
+
+        $id = $_GET['id'] ?? null;
+        if (!$id || !ctype_digit((string)$id)) {
+            $this->redirectWithMessage(
+                'index.php?controller=admin&action=verifikasiUser',
+                'ID registrasi tidak valid.',
+                'error'
+            );
+            return;
+        }
+
+        $registrasiModel = new Registrasi();
+        $reg = $registrasiModel->findById((int)$id);
+
+        if (!$reg) {
+            $this->redirectWithMessage(
+                'index.php?controller=admin&action=verifikasiUser',
+                'Data registrasi tidak ditemukan.',
+                'error'
+            );
+            return;
+        }
+
+        $this->view('admin/detailregistrasi', [
+            'reg' => $reg,
         ]);
     }
 }

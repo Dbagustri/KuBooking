@@ -9,28 +9,76 @@
 
 <body class="bg-[#f2f7fc] text-gray-800 flex">
 
-    <!-- SIDEBAR -->
     <?php
+    // ==========================
+    // SIDEBAR
+    // ==========================
     $sidebarPath = __DIR__ . '/../layout/sidebar.php';
     if (file_exists($sidebarPath)) {
         include $sidebarPath;
     }
 
+    // ==========================
     // DATA DARI CONTROLLER
-    $range   = $range ?? 'month';
+    // ==========================
+    $range          = $range ?? 'month';
 
-    $rooms      = $summary_rooms      ?? [];
-    $roomsPage  = $rooms_page         ?? 1;
-    $roomsTotal = $rooms_total_pages  ?? 1;
+    $roomsRaw       = $summary_rooms   ?? [];
+    $prodiRaw       = $summary_prodi   ?? [];
+    $jurusanRaw     = $summary_jurusan ?? [];
+    $ratingSummary  = $summary_rating  ?? [];
 
-    // Jika nanti ada:
-    $prodi      = $summary_prodi      ?? [];
-    $prodiPage  = $prodi_page         ?? 1;
-    $prodiTotal = $prodi_total_pages  ?? 1;
+    /**
+     * Helper pivot: 
+     *  - $rows: array data mentah
+     *  - $keyDate: nama kolom tanggal (string)
+     *  - $keyCat: nama kolom kategori (ruangan/prodi/jurusan)
+     *  - $keyTotal: nama kolom total
+     * Return:
+     *  - ['dates' => [...], 'categories' => [...], 'data' => [tanggal => [kategori => total]]]
+     */
+    function pivotByCategory(array $rows, string $keyDate, string $keyCat, string $keyTotal): array
+    {
+        $dates      = [];
+        $categories = [];
+        $data       = [];
 
-    $rating     = $summary_rating     ?? [];
-    $ratingPage = $rating_page        ?? 1;
-    $ratingTotal = $rating_total_pages ?? 1;
+        foreach ($rows as $row) {
+            $tgl = $row[$keyDate] ?? null;
+            $cat = $row[$keyCat] ?? null;
+            $tot = (int)($row[$keyTotal] ?? 0);
+
+            if (!$tgl || !$cat) {
+                continue;
+            }
+
+            if (!in_array($tgl, $dates, true)) {
+                $dates[] = $tgl;
+            }
+            if (!in_array($cat, $categories, true)) {
+                $categories[] = $cat;
+            }
+
+            if (!isset($data[$tgl])) {
+                $data[$tgl] = [];
+            }
+            $data[$tgl][$cat] = $tot;
+        }
+
+        sort($dates);
+        sort($categories);
+
+        return [
+            'dates'      => $dates,
+            'categories' => $categories,
+            'data'       => $data,
+        ];
+    }
+
+    // Pivot untuk masing-masing laporan
+    $pivotRuangan = pivotByCategory($roomsRaw,   'tanggal', 'nama_ruangan', 'total');
+    $pivotProdi   = pivotByCategory($prodiRaw,   'tanggal', 'prodi',        'total');
+    $pivotJurusan = pivotByCategory($jurusanRaw, 'tanggal', 'jurusan',      'total');
     ?>
 
     <!-- KONTEN -->
@@ -50,7 +98,7 @@
             <h1 class="text-2xl font-bold text-[#1e3a5f]">Laporan</h1>
 
             <!-- FILTER RANGE -->
-            <div class="flex space-x-2">
+            <div class="flex flex-wrap gap-2">
                 <?php
                 $ranges = [
                     'week'   => '1 Minggu',
@@ -71,13 +119,12 @@
             </div>
 
             <!-- ====================================================== -->
-            <!-- 1. LAPORAN RUANGAN TERBANYAK -->
+            <!-- 1. LAPORAN RUANGAN TERBANYAK (PIVOT) -->
             <!-- ====================================================== -->
-
             <div class="bg-white shadow rounded-xl p-6 space-y-4">
                 <div class="flex items-center justify-between">
                     <h2 class="text-lg font-bold text-[#1e3a5f]">
-                        Ruangan Dipinjam Terbanyak
+                        Laporan Ruangan Terbanyak (per Tanggal)
                     </h2>
 
                     <button class="px-4 py-1.5 bg-[#1e3a5f] text-white rounded-lg text-sm hover:bg-[#163052]">
@@ -86,75 +133,62 @@
                 </div>
 
                 <div class="overflow-x-auto">
-                    <table class="min-w-full bg-white border border-gray-200 rounded-lg">
-                        <thead>
-                            <tr class="bg-gray-200 text-gray-800 text-sm">
-                                <th class="px-3 py-2">No</th>
-                                <th class="px-3 py-2">Tanggal</th>
-                                <th class="px-3 py-2">Ruangan Pertama</th>
-                                <th class="px-3 py-2">Ruangan Kedua</th>
-                                <th class="px-3 py-2">Ruangan Ketiga</th>
-                                <th class="px-3 py-2">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (!empty($rooms)): ?>
-                                <?php foreach ($rooms as $i => $row): ?>
-                                    <tr class="<?= $i % 2 ? 'bg-gray-50' : 'bg-white' ?> border-b">
-                                        <td class="px-3 py-2 text-center"><?= $i + 1 ?></td>
-                                        <td class="px-3 py-2"><?= htmlspecialchars($row['tanggal'] ?? '-') ?></td>
-                                        <td class="px-3 py-2 text-center"><?= $row['ruang_1'] ?? 0 ?></td>
-                                        <td class="px-3 py-2 text-center"><?= $row['ruang_2'] ?? 0 ?></td>
-                                        <td class="px-3 py-2 text-center"><?= $row['ruang_3'] ?? 0 ?></td>
-                                        <td class="px-3 py-2 text-center"><?= $row['total'] ?? 0 ?></td>
+                    <?php if (!empty($pivotRuangan['dates']) && !empty($pivotRuangan['categories'])): ?>
+                        <table class="min-w-full bg-white border border-gray-200 rounded-lg text-sm">
+                            <thead>
+                                <tr class="bg-gray-200 text-gray-800">
+                                    <th class="px-3 py-2 text-left">Tanggal</th>
+                                    <?php foreach ($pivotRuangan['categories'] as $roomName): ?>
+                                        <th class="px-3 py-2 text-center">
+                                            <?= htmlspecialchars($roomName) ?>
+                                        </th>
+                                    <?php endforeach; ?>
+                                    <th class="px-3 py-2 text-center">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($pivotRuangan['dates'] as $tgl): ?>
+                                    <?php
+                                    $rowData = $pivotRuangan['data'][$tgl] ?? [];
+                                    $sum     = 0;
+                                    ?>
+                                    <tr class="border-b <?= (strtotime($tgl) % 2) ? 'bg-gray-50' : 'bg-white' ?>">
+                                        <td class="px-3 py-2 whitespace-nowrap">
+                                            <?= htmlspecialchars($tgl) ?>
+                                        </td>
+
+                                        <?php foreach ($pivotRuangan['categories'] as $roomName): ?>
+                                            <?php
+                                            $val = isset($rowData[$roomName]) ? (int)$rowData[$roomName] : 0;
+                                            $sum += $val;
+                                            ?>
+                                            <td class="px-3 py-2 text-center">
+                                                <?= $val ?>
+                                            </td>
+                                        <?php endforeach; ?>
+
+                                        <td class="px-3 py-2 text-center font-semibold">
+                                            <?= $sum ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
-                            <?php else: ?>
-                                <tr>
-                                    <td colspan="6" class="px-3 py-6 text-center text-gray-500">
-                                        Tidak ada data.
-                                    </td>
-                                </tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
+                            </tbody>
+                        </table>
+                    <?php else: ?>
+                        <p class="text-gray-500 text-sm text-center py-4">
+                            Tidak ada data ruangan untuk range ini.
+                        </p>
+                    <?php endif; ?>
                 </div>
-
-                <!-- PAGINATION -->
-                <?php if ($roomsTotal > 1): ?>
-                    <div class="flex justify-center space-x-1 pt-2">
-                        <?php if ($roomsPage > 1): ?>
-                            <a href="index.php?controller=admin&action=laporan&range=<?= $range ?>&rooms_page=<?= $roomsPage - 1 ?>"
-                                class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">&lt;</a>
-                        <?php else: ?>
-                            <span class="px-3 py-1 bg-gray-100 text-gray-400 rounded">&lt;</span>
-                        <?php endif; ?>
-
-                        <?php for ($p = 1; $p <= $roomsTotal; $p++): ?>
-                            <a href="index.php?controller=admin&action=laporan&range=<?= $range ?>&rooms_page=<?= $p ?>"
-                                class="px-3 py-1 rounded <?= $p == $roomsPage ? 'bg-[#1e3a5f] text-white' : 'bg-gray-200 hover:bg-gray-300' ?>">
-                                <?= $p ?>
-                            </a>
-                        <?php endfor; ?>
-
-                        <?php if ($roomsPage < $roomsTotal): ?>
-                            <a href="index.php?controller=admin&action=laporan&range=<?= $range ?>&rooms_page=<?= $roomsPage + 1 ?>"
-                                class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">&gt;</a>
-                        <?php else: ?>
-                            <span class="px-3 py-1 bg-gray-100 text-gray-400 rounded">&gt;</span>
-                        <?php endif; ?>
-                    </div>
-                <?php endif; ?>
             </div>
 
             <!-- ====================================================== -->
-            <!-- 2. LAPORAN PRODI / JURUSAN -->
+            <!-- 2. LAPORAN BERDASARKAN PRODI (PIVOT) -->
             <!-- ====================================================== -->
-
             <div class="bg-white shadow rounded-xl p-6 space-y-4">
                 <div class="flex items-center justify-between">
                     <h2 class="text-lg font-bold text-[#1e3a5f]">
-                        Ruangan Dipinjam Berdasarkan Prodi
+                        Laporan Berdasarkan Prodi (per Tanggal)
                     </h2>
 
                     <button class="px-4 py-1.5 bg-[#1e3a5f] text-white rounded-lg text-sm hover:bg-[#163052]">
@@ -163,82 +197,62 @@
                 </div>
 
                 <div class="overflow-x-auto">
-                    <table class="min-w-full bg-white border border-gray-200 rounded-lg">
-                        <thead>
-                            <tr class="bg-gray-200 text-gray-800 text-sm">
-                                <th class="px-3 py-2">No</th>
-                                <th class="px-3 py-2">Tanggal</th>
-                                <th class="px-3 py-2">TI</th>
-                                <th class="px-3 py-2">TS</th>
-                                <th class="px-3 py-2">TIF</th>
-                                <th class="px-3 py-2">TAV</th>
-                                <th class="px-3 py-2">AK</th>
-                                <th class="px-3 py-2">TE</th>
-                                <th class="px-3 py-2">Total</th>
-                            </tr>
-                        </thead>
+                    <?php if (!empty($pivotProdi['dates']) && !empty($pivotProdi['categories'])): ?>
+                        <table class="min-w-full bg-white border border-gray-200 rounded-lg text-sm">
+                            <thead>
+                                <tr class="bg-gray-200 text-gray-800">
+                                    <th class="px-3 py-2 text-left">Tanggal</th>
+                                    <?php foreach ($pivotProdi['categories'] as $prodi): ?>
+                                        <th class="px-3 py-2 text-center">
+                                            <?= htmlspecialchars($prodi) ?>
+                                        </th>
+                                    <?php endforeach; ?>
+                                    <th class="px-3 py-2 text-center">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($pivotProdi['dates'] as $tgl): ?>
+                                    <?php
+                                    $rowData = $pivotProdi['data'][$tgl] ?? [];
+                                    $sum     = 0;
+                                    ?>
+                                    <tr class="border-b <?= (strtotime($tgl) % 2) ? 'bg-gray-50' : 'bg-white' ?>">
+                                        <td class="px-3 py-2 whitespace-nowrap">
+                                            <?= htmlspecialchars($tgl) ?>
+                                        </td>
 
-                        <tbody>
-                            <?php if (!empty($prodi)): ?>
-                                <?php foreach ($prodi as $i => $row): ?>
-                                    <tr class="<?= $i % 2 ? 'bg-gray-50' : 'bg-white' ?> border-b">
-                                        <td class="px-3 py-2 text-center"><?= $i + 1 ?></td>
-                                        <td class="px-3 py-2"><?= htmlspecialchars($row['tanggal'] ?? '-') ?></td>
-                                        <td class="px-3 py-2 text-center"><?= $row['TI'] ?? 0 ?></td>
-                                        <td class="px-3 py-2 text-center"><?= $row['TS'] ?? 0 ?></td>
-                                        <td class="px-3 py-2 text-center"><?= $row['TIF'] ?? 0 ?></td>
-                                        <td class="px-3 py-2 text-center"><?= $row['TAV'] ?? 0 ?></td>
-                                        <td class="px-3 py-2 text-center"><?= $row['AK'] ?? 0 ?></td>
-                                        <td class="px-3 py-2 text-center"><?= $row['TE'] ?? 0 ?></td>
-                                        <td class="px-3 py-2 text-center"><?= $row['total'] ?? 0 ?></td>
+                                        <?php foreach ($pivotProdi['categories'] as $prodi): ?>
+                                            <?php
+                                            $val = isset($rowData[$prodi]) ? (int)$rowData[$prodi] : 0;
+                                            $sum += $val;
+                                            ?>
+                                            <td class="px-3 py-2 text-center">
+                                                <?= $val ?>
+                                            </td>
+                                        <?php endforeach; ?>
+
+                                        <td class="px-3 py-2 text-center font-semibold">
+                                            <?= $sum ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
-                            <?php else: ?>
-                                <tr>
-                                    <td colspan="9" class="px-3 py-6 text-center text-gray-500">
-                                        Tidak ada data.
-                                    </td>
-                                </tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
+                            </tbody>
+                        </table>
+                    <?php else: ?>
+                        <p class="text-gray-500 text-sm text-center py-4">
+                            Tidak ada data prodi untuk range ini.
+                        </p>
+                    <?php endif; ?>
                 </div>
-
-                <!-- PAGINATION -->
-                <?php if ($prodiTotal > 1): ?>
-                    <div class="flex justify-center space-x-1 pt-2">
-                        <?php if ($prodiPage > 1): ?>
-                            <a href="index.php?controller=admin&action=laporan&range=<?= $range ?>&prodi_page=<?= $prodiPage - 1 ?>"
-                                class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">&lt;</a>
-                        <?php else: ?>
-                            <span class="px-3 py-1 bg-gray-100 text-gray-400 rounded">&lt;</span>
-                        <?php endif; ?>
-
-                        <?php for ($p = 1; $p <= $prodiTotal; $p++): ?>
-                            <a href="index.php?controller=admin&action=laporan&range=<?= $range ?>&prodi_page=<?= $p ?>"
-                                class="px-3 py-1 rounded <?= $p == $prodiPage ? 'bg-[#1e3a5f] text-white' : 'bg-gray-200 hover:bg-gray-300' ?>">
-                                <?= $p ?>
-                            </a>
-                        <?php endfor; ?>
-
-                        <?php if ($prodiPage < $prodiTotal): ?>
-                            <a href="index.php?controller=admin&action=laporan&range=<?= $range ?>&prodi_page=<?= $prodiPage + 1 ?>"
-                                class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">&gt;</a>
-                        <?php else: ?>
-                            <span class="px-3 py-1 bg-gray-100 text-gray-400 rounded">&gt;</span>
-                        <?php endif; ?>
-                    </div>
-                <?php endif; ?>
             </div>
 
             <!-- ====================================================== -->
-            <!-- 3. LAPORAN RATING -->
+            <!-- 3. LAPORAN BERDASARKAN JURUSAN (PIVOT) -->
             <!-- ====================================================== -->
-
             <div class="bg-white shadow rounded-xl p-6 space-y-4">
                 <div class="flex items-center justify-between">
                     <h2 class="text-lg font-bold text-[#1e3a5f]">
-                        Rating Ruangan
+                        Laporan Berdasarkan Jurusan (per Tanggal)
                     </h2>
 
                     <button class="px-4 py-1.5 bg-[#1e3a5f] text-white rounded-lg text-sm hover:bg-[#163052]">
@@ -247,65 +261,101 @@
                 </div>
 
                 <div class="overflow-x-auto">
-                    <table class="min-w-full bg-white border border-gray-200 rounded-lg">
-                        <thead>
-                            <tr class="bg-gray-200 text-gray-800 text-sm">
-                                <th class="px-3 py-2">No</th>
-                                <th class="px-3 py-2">Tanggal</th>
-                                <th class="px-3 py-2">Ruangan Pertama</th>
-                                <th class="px-3 py-2">Ruangan Kedua</th>
-                                <th class="px-3 py-2">Ruangan Ketiga</th>
-                                <th class="px-3 py-2">Rata-rata</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (!empty($rating)): ?>
-                                <?php foreach ($rating as $i => $row): ?>
-                                    <tr class="<?= $i % 2 ? 'bg-gray-50' : 'bg-white' ?> border-b">
-                                        <td class="px-3 py-2 text-center"><?= $i + 1 ?></td>
-                                        <td class="px-3 py-2"><?= htmlspecialchars($row['tanggal'] ?? '-') ?></td>
-                                        <td class="px-3 py-2 text-center"><?= $row['r1'] ?? 0 ?></td>
-                                        <td class="px-3 py-2 text-center"><?= $row['r2'] ?? 0 ?></td>
-                                        <td class="px-3 py-2 text-center><?= $row['r3'] ?? 0 ?></td>
-                                        <td class=" px-3 py-2 text-center"><?= $row['avg'] ?? 0 ?></td>
+                    <?php if (!empty($pivotJurusan['dates']) && !empty($pivotJurusan['categories'])): ?>
+                        <table class="min-w-full bg-white border border-gray-200 rounded-lg text-sm">
+                            <thead>
+                                <tr class="bg-gray-200 text-gray-800">
+                                    <th class="px-3 py-2 text-left">Tanggal</th>
+                                    <?php foreach ($pivotJurusan['categories'] as $jurusan): ?>
+                                        <th class="px-3 py-2 text-center">
+                                            <?= htmlspecialchars($jurusan) ?>
+                                        </th>
+                                    <?php endforeach; ?>
+                                    <th class="px-3 py-2 text-center">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($pivotJurusan['dates'] as $tgl): ?>
+                                    <?php
+                                    $rowData = $pivotJurusan['data'][$tgl] ?? [];
+                                    $sum     = 0;
+                                    ?>
+                                    <tr class="border-b <?= (strtotime($tgl) % 2) ? 'bg-gray-50' : 'bg-white' ?>">
+                                        <td class="px-3 py-2 whitespace-nowrap">
+                                            <?= htmlspecialchars($tgl) ?>
+                                        </td>
+
+                                        <?php foreach ($pivotJurusan['categories'] as $jurusan): ?>
+                                            <?php
+                                            $val = isset($rowData[$jurusan]) ? (int)$rowData[$jurusan] : 0;
+                                            $sum += $val;
+                                            ?>
+                                            <td class="px-3 py-2 text-center">
+                                                <?= $val ?>
+                                            </td>
+                                        <?php endforeach; ?>
+
+                                        <td class="px-3 py-2 text-center font-semibold">
+                                            <?= $sum ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
-                            <?php else: ?>
-                                <tr>
-                                    <td colspan="6" class="px-3 py-6 text-center text-gray-500">
-                                        Tidak ada data.
-                                    </td>
-                                </tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
+                            </tbody>
+                        </table>
+                    <?php else: ?>
+                        <p class="text-gray-500 text-sm text-center py-4">
+                            Tidak ada data jurusan untuk range ini.
+                        </p>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <!-- ====================================================== -->
+            <!-- 4. LAPORAN RATING RUANGAN (NON-PIVOT) -->
+            <!-- ====================================================== -->
+            <div class="bg-white shadow rounded-xl p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-bold text-[#1e3a5f]">
+                        Laporan Rating Ruangan (Rata-rata di Range Terpilih)
+                    </h2>
+
+                    <button class="px-4 py-1.5 bg-[#1e3a5f] text-white rounded-lg text-sm hover:bg-[#163052]">
+                        Export
+                    </button>
                 </div>
 
-                <!-- PAGINATION -->
-                <?php if ($ratingTotal > 1): ?>
-                    <div class="flex justify-center space-x-1 pt-2">
-                        <?php if ($ratingPage > 1): ?>
-                            <a href="index.php?controller=admin&action=laporan&range=<?= $range ?>&rating_page=<?= $ratingPage - 1 ?>"
-                                class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">&lt;</a>
-                        <?php else: ?>
-                            <span class="px-3 py-1 bg-gray-100 text-gray-400 rounded">&lt;</span>
-                        <?php endif; ?>
-
-                        <?php for ($p = 1; $p <= $ratingTotal; $p++): ?>
-                            <a href="index.php?controller=admin&action=laporan&range=<?= $range ?>&rating_page=<?= $p ?>"
-                                class="px-3 py-1 rounded <?= $p == $ratingPage ? 'bg-[#1e3a5f] text-white' : 'bg-gray-200 hover:bg-gray-300' ?>">
-                                <?= $p ?>
-                            </a>
-                        <?php endfor; ?>
-
-                        <?php if ($ratingPage < $ratingTotal): ?>
-                            <a href="index.php?controller=admin&action=laporan&range=<?= $range ?>&rating_page=<?= $ratingPage + 1 ?>"
-                                class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">&gt;</a>
-                        <?php else: ?>
-                            <span class="px-3 py-1 bg-gray-100 text-gray-400 rounded">&gt;</span>
-                        <?php endif; ?>
-                    </div>
-                <?php endif; ?>
+                <div class="overflow-x-auto">
+                    <?php if (!empty($ratingSummary)): ?>
+                        <table class="min-w-full bg-white border border-gray-200 rounded-lg text-sm">
+                            <thead>
+                                <tr class="bg-gray-200 text-gray-800">
+                                    <th class="px-3 py-2 text-left">Ruangan</th>
+                                    <th class="px-3 py-2 text-center">Rata-rata Rating</th>
+                                    <th class="px-3 py-2 text-center">Jumlah Feedback</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($ratingSummary as $row): ?>
+                                    <tr class="border-b">
+                                        <td class="px-3 py-2">
+                                            <?= htmlspecialchars($row['nama_ruangan'] ?? '-') ?>
+                                        </td>
+                                        <td class="px-3 py-2 text-center">
+                                            <?= number_format((float)($row['avg_rating_range'] ?? 0), 2) ?>
+                                        </td>
+                                        <td class="px-3 py-2 text-center">
+                                            <?= (int)($row['total_feedback'] ?? 0) ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php else: ?>
+                        <p class="text-gray-500 text-sm text-center py-4">
+                            Belum ada feedback untuk range ini.
+                        </p>
+                    <?php endif; ?>
+                </div>
             </div>
 
         </div>

@@ -17,17 +17,15 @@
     }
 
     // data dari controller (AdminController::anggota)
-    $users       = $users        ?? [];
-    $currentPage = $current_page ?? 1;
-    $totalPages  = $total_pages  ?? 1;
-    $filter      = $filter       ?? '';
-    $search      = $search       ?? '';
+    $users        = $users        ?? [];
+    $currentPage  = $current_page ?? 1;
+    $totalPages   = $total_pages  ?? 1;
+    $filter       = $filter       ?? '';
+    $search       = $search       ?? '';
+    $currentLogin = \App\Core\Auth::user();
     ?>
 
-    <!-- KONTEN -->
     <div class="flex-1 flex flex-col h-screen overflow-y-auto">
-
-        <!-- NAVBAR -->
         <div class="m-4">
             <?php
             $navPath = __DIR__ . '/../layout/nav-admin.php';
@@ -38,37 +36,50 @@
         </div>
 
         <div class="px-8 pb-10 space-y-6">
+            <div>
+                <h1 class="text-2xl font-bold text-[#1e3a5f]">Kelola User</h1>
+                <p class="text-sm text-gray-600 mt-1">
+                    Kelola akun anggota perpustakaan: ubah profil, atur status aktif, dan hapus akun jika diperlukan.
+                </p>
+            </div>
 
-            <h1 class="text-2xl font-bold text-[#1e3a5f]">Kelola User</h1>
-
-            <!-- FILTER & SEARCH -->
-            <form method="get" class="flex flex-col lg:flex-row lg:items-center lg:space-x-4 space-y-3 lg:space-y-0">
+            <form method="get"
+                class="flex flex-col lg:flex-row lg:items-end lg:space-x-4 space-y-3 lg:space-y-0">
 
                 <input type="hidden" name="controller" value="admin">
                 <input type="hidden" name="action" value="anggota">
 
-                <!-- FILTER ROLE -->
-                <select name="filter" class="bg-white border border-gray-300 rounded-full px-4 py-2 text-sm shadow">
-                    <option value="">Semua Role</option>
-                    <option value="mahasiswa" <?= $filter === 'mahasiswa'   ? 'selected' : '' ?>>Mahasiswa</option>
-                    <option value="dosen" <?= $filter === 'dosen'       ? 'selected' : '' ?>>Dosen</option>
-                    <option value="tendik" <?= $filter === 'tendik'      ? 'selected' : '' ?>>Tendik</option>
-                    <option value="admin" <?= $filter === 'admin'       ? 'selected' : '' ?>>Admin</option>
-                    <option value="super_admin" <?= $filter === 'super_admin' ? 'selected' : '' ?>>Super Admin</option>
-                </select>
-
-                <!-- SEARCH -->
-                <div class="flex flex-1 items-center bg-white rounded-full px-4 py-2 shadow border border-gray-200">
-                    <input type="text"
-                        name="q"
-                        value="<?= htmlspecialchars($search) ?>"
-                        placeholder="Cari nama atau email"
-                        class="flex-1 text-sm bg-transparent focus:outline-none">
+                <div class="flex flex-col">
+                    <label class="text-xs font-medium text-gray-600 mb-1">Filter role</label>
+                    <select name="filter"
+                        class="bg-white border border-gray-300 rounded-full px-4 py-2 text-sm shadow">
+                        <option value="">Semua Role</option>
+                        <option value="mahasiswa" <?= $filter === 'mahasiswa'   ? 'selected' : '' ?>>Mahasiswa</option>
+                        <option value="dosen" <?= $filter === 'dosen'       ? 'selected' : '' ?>>Dosen</option>
+                        <option value="tendik" <?= $filter === 'tendik'      ? 'selected' : '' ?>>Tendik</option>
+                        <option value="admin" <?= $filter === 'admin'       ? 'selected' : '' ?>>Admin</option>
+                        <option value="super_admin" <?= $filter === 'super_admin' ? 'selected' : '' ?>>Super Admin</option>
+                    </select>
                 </div>
 
+                <!-- SEARCH -->
+                <div class="flex-1 flex flex-col">
+                    <label class="text-xs font-medium text-gray-600 mb-1">Cari user</label>
+                    <div class="flex items-center bg-white rounded-full px-4 py-2 shadow border border-gray-200">
+                        <input type="text"
+                            name="q"
+                            value="<?= htmlspecialchars($search) ?>"
+                            placeholder="Cari berdasarkan nama atau email"
+                            class="flex-1 text-sm bg-transparent focus:outline-none">
+                    </div>
+                </div>
+
+                <!-- BUTTON -->
                 <button type="submit"
-                    class="w-10 h-10 rounded-full bg-[#1e3a5f] flex items-center justify-center text-white hover:bg-[#163052] transition">
-                    🔍
+                    class="mt-1 lg:mt-0 w-full lg:w-28 rounded-full bg-[#1e3a5f] px-4 py-2
+                               flex items-center justify-center text-white text-sm font-medium
+                               hover:bg-[#163052] transition">
+                    <span class="mr-1">Cari</span> 🔍
                 </button>
             </form>
 
@@ -78,8 +89,10 @@
                     <thead>
                         <tr class="bg-[#1e3a5f] text-white text-left text-sm">
                             <th class="px-4 py-3">Nama</th>
+                            <th class="px-4 py-3">NIM / NIP</th>
                             <th class="px-4 py-3">Email</th>
                             <th class="px-4 py-3">Jurusan / Unit</th>
+                            <th class="px-4 py-3">Role</th>
                             <th class="px-4 py-3">Screenshot</th>
                             <th class="px-4 py-3">Status</th>
                             <th class="px-4 py-3 text-center">Aksi</th>
@@ -91,22 +104,51 @@
                             <?php foreach ($users as $i => $u): ?>
                                 <?php
                                 $id         = (int)($u['id_account'] ?? 0);
-                                $status     = $u['status_aktif'] ?? 'aktif';
+                                $status     = $u['status_aktif'] ?? 'nonaktif';
                                 $jurusan    = $u['jurusan'] ?? ($u['unit_jurusan'] ?? '-');
-                                $badgeClass = $status === 'aktif'
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-red-100 text-red-800';
+                                $nimNip     = $u['nim_nip'] ?? '-';
+                                $role       = $u['role'] ?? '-';
+
+                                // badge status
+                                $badgeMap = [
+                                    'aktif'    => 'bg-green-100 text-green-800',
+                                    'nonaktif' => 'bg-red-100 text-red-800',
+                                ];
+                                $badgeClass = $badgeMap[$status] ?? 'bg-gray-100 text-gray-800';
+
+                                // badge role
+                                $roleClass =
+                                    $role === 'mahasiswa'   ? 'bg-blue-50 text-blue-700'   : ($role === 'dosen'      ? 'bg-purple-50 text-purple-700' : ($role === 'tendik'     ? 'bg-amber-50 text-amber-700' : ($role === 'admin'      ? 'bg-slate-100 text-slate-800' : ($role === 'super_admin' ? 'bg-rose-50 text-rose-700' :
+                                        'bg-gray-100 text-gray-700'))));
                                 ?>
                                 <tr class="<?= $i % 2 === 0 ? 'bg-gray-50' : 'bg-gray-100'; ?> text-sm text-gray-800 border-b">
 
-                                    <td class="px-4 py-3"><?= htmlspecialchars($u['nama'] ?? '-') ?></td>
-                                    <td class="px-4 py-3"><?= htmlspecialchars($u['email'] ?? '-') ?></td>
-                                    <td class="px-4 py-3"><?= htmlspecialchars($jurusan) ?></td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <?= htmlspecialchars($u['nama'] ?? '-') ?>
+                                    </td>
+
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <?= htmlspecialchars($nimNip) ?>
+                                    </td>
+
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <?= htmlspecialchars($u['email'] ?? '-') ?>
+                                    </td>
+
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <?= htmlspecialchars($jurusan) ?>
+                                    </td>
+
+                                    <td class="px-4 py-3">
+                                        <span class="px-3 py-1 rounded-full text-xs font-medium <?= $roleClass ?>">
+                                            <?= htmlspecialchars(ucfirst(str_replace('_', ' ', $role))) ?>
+                                        </span>
+                                    </td>
 
                                     <td class="px-4 py-3 text-blue-600 hover:underline text-sm">
                                         <?php if (!empty($u['screenshot_kubaca'])): ?>
                                             <a href="<?= htmlspecialchars($u['screenshot_kubaca']) ?>" target="_blank">
-                                                lihat bukti
+                                                Lihat bukti
                                             </a>
                                         <?php else: ?>
                                             <span class="text-gray-400">Tidak ada</span>
@@ -124,12 +166,14 @@
                                         <div class="relative inline-block text-left">
                                             <button type="button"
                                                 onclick="toggleMenu('user-<?= $id ?>')"
-                                                class="inline-flex justify-center w-8 h-8 rounded-full hover:bg-gray-200 text-xl leading-none">
+                                                class="inline-flex justify-center w-8 h-8 rounded-full hover:bg-gray-200 text-xl leading-none"
+                                                aria-haspopup="true"
+                                                aria-expanded="false">
                                                 &#8226;&#8226;&#8226;
                                             </button>
 
                                             <div id="user-<?= $id ?>"
-                                                class="hidden origin-top-right absolute right-0 mt-2 w-44
+                                                class="hidden origin-top-right absolute right-0 mt-2 w-48
                                                         rounded-md shadow-lg bg-white ring-1 ring-black/5
                                                         z-20 text-left text-sm">
 
@@ -138,10 +182,13 @@
                                                     class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
                                                     Edit profil
                                                 </a>
-                                                <a href="index.php?controller=admin&action=detailUser&id=<?= $u['id_account'] ?>"
+
+                                                <!-- DETAIL -->
+                                                <a href="index.php?controller=admin&action=detailUser&id=<?= $id ?>"
                                                     class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
                                                     Detail
                                                 </a>
+
                                                 <!-- AKTIF / NONAKTIF -->
                                                 <?php if ($status === 'aktif'): ?>
                                                     <form action="index.php?controller=admin&action=setUserStatus"
@@ -167,17 +214,19 @@
                                                     </form>
                                                 <?php endif; ?>
 
-                                                <!-- DELETE -->
-                                                <form action="index.php?controller=admin&action=deleteUser"
-                                                    method="POST"
-                                                    onsubmit="return confirm('Yakin ingin menghapus user ini? Tindakan ini tidak dapat dibatalkan.');">
-                                                    <input type="hidden" name="id_user" value="<?= $id ?>">
-                                                    <button type="submit"
-                                                        class="w-full text-left px-4 py-2 border-t
-                                                                   text-red-700 hover:bg-red-50">
-                                                        Hapus
-                                                    </button>
-                                                </form>
+                                                <!-- DELETE (jangan tampilkan kalau user yang login sendiri) -->
+                                                <?php if (empty($currentLogin['id_account']) || (int)$currentLogin['id_account'] !== $id): ?>
+                                                    <form action="index.php?controller=admin&action=deleteUser"
+                                                        method="POST"
+                                                        onsubmit="return confirm('Yakin ingin menghapus user ini? Tindakan ini tidak dapat dibatalkan.');">
+                                                        <input type="hidden" name="id_user" value="<?= $id ?>">
+                                                        <button type="submit"
+                                                            class="w-full text-left px-4 py-2 border-t
+                                                                       text-red-700 hover:bg-red-50">
+                                                            Hapus
+                                                        </button>
+                                                    </form>
+                                                <?php endif; ?>
 
                                             </div>
                                         </div>
@@ -187,8 +236,9 @@
                             <?php endforeach; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="6" class="px-4 py-8 text-center text-gray-500">
-                                    Tidak ada data user.
+                                <td colspan="8" class="px-4 py-10 text-center text-gray-500 text-sm">
+                                    Tidak ada user yang cocok dengan filter saat ini.<br>
+                                    Coba ubah kata kunci atau filter role.
                                 </td>
                             </tr>
                         <?php endif; ?>
@@ -236,7 +286,6 @@
             menu.classList.toggle('hidden');
         }
 
-        // Tutup dropdown kalau klik di luar
         document.addEventListener('click', function(e) {
             document.querySelectorAll("[id^='user-']").forEach(menu => {
                 const btn = menu.previousElementSibling;

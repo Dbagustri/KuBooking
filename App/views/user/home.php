@@ -18,20 +18,54 @@
   }
 
   // pastikan variabel aman
-  $rooms      = $rooms      ?? [];
-  $join_error = $join_error ?? null;
-  $currentUser   = $currentUser   ?? null;
-  $booking_aktif = $booking_aktif ?? null;
-  $canBook       = $canBook       ?? false;
+  $rooms            = $rooms            ?? [];
+  $join_error       = $join_error       ?? null;
+  $currentUser      = $currentUser      ?? null;
+  $booking_aktif    = $booking_aktif    ?? null;
+  $canBook          = $canBook          ?? false;
+  $unratedBooking   = $unratedBooking   ?? null; // 👈 PENTING: booking yang belum dirating
+
   $hasActiveBooking = !empty($booking_aktif);
   $buttonDisabled   = (!$canBook || $hasActiveBooking);
   ?>
 
   <!-- ALERT JOIN ERROR (jika ada) -->
-  <div class="w-full max-w-7xl mx-auto mt-6 px-4">
+  <div class="w-full max-w-7xl mx-auto mt-6 px-4 space-y-3">
     <?php if (!empty($join_error)): ?>
       <div class="bg-red-100 text-red-700 px-4 py-2 rounded-lg shadow">
         <?= htmlspecialchars($join_error) ?>
+      </div>
+    <?php endif; ?>
+
+    <!-- 🔔 ALERT WAJIB RATING -->
+    <?php if (!empty($unratedBooking)): ?>
+      <div class="bg-yellow-50 border-l-4 border-yellow-400 px-4 py-3 rounded-lg shadow flex items-start gap-3">
+        <div class="mt-0.5">⚠️</div>
+        <div class="text-sm text-yellow-800">
+          <p class="font-semibold mb-1">Kamu punya peminjaman yang belum diberi rating.</p>
+          <p class="mb-1">
+            Ruangan:
+            <span class="font-medium">
+              <?= htmlspecialchars($unratedBooking['nama_ruangan'] ?? 'Ruangan') ?>
+            </span>
+            —
+            Tanggal:
+            <span class="font-medium">
+              <?= isset($unratedBooking['start_time'])
+                ? date('d M Y', strtotime($unratedBooking['start_time']))
+                : htmlspecialchars($unratedBooking['tanggal'] ?? '-') ?>
+            </span>
+          </p>
+          <p class="mb-2">
+            Kamu belum bisa melakukan booking baru sebelum memberi rating pada peminjaman ini.
+          </p>
+          <button
+            type="button"
+            class="open-rating-modal-home inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-yellow-500 text-white text-xs font-semibold hover:bg-yellow-600"
+            data-id="<?= (int)($unratedBooking['id_bookings'] ?? 0) ?>">
+            ⭐ Beri Rating Sekarang
+          </button>
+        </div>
       </div>
     <?php endif; ?>
   </div>
@@ -113,7 +147,41 @@
     </div>
   </div>
 
-  <!-- === SCRIPT: Logika Modal + Redirect === -->
+  <!-- ⭐ MODAL RATING (HOME) -->
+  <div id="ratingModalHome" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+    <div class="bg-white w-80 rounded-xl p-5 space-y-4">
+      <h2 class="text-lg font-semibold">Beri Rating</h2>
+
+      <form action="index.php?controller=userFeedback&action=submit" method="POST">
+        <input type="hidden" name="id_booking" id="rating_booking_id_home">
+        <input type="hidden" name="rating" id="rating_value_home">
+
+        <div class="flex justify-center gap-2 text-2xl">
+          <span class="rating-star-home cursor-pointer opacity-30" data-value="1">😡</span>
+          <span class="rating-star-home cursor-pointer opacity-30" data-value="2">😞</span>
+          <span class="rating-star-home cursor-pointer opacity-30" data-value="3">😐</span>
+          <span class="rating-star-home cursor-pointer opacity-30" data-value="4">😊</span>
+          <span class="rating-star-home cursor-pointer opacity-30" data-value="5">🤩</span>
+        </div>
+
+        <textarea
+          name="komentar"
+          rows="3"
+          placeholder="Komentar (opsional)"
+          class="w-full border rounded-lg p-2 text-sm mt-3"></textarea>
+
+        <div class="flex justify-end gap-2 mt-3">
+          <button type="button" id="ratingCloseHome" class="text-sm text-slate-600">Batal</button>
+          <button type="submit"
+            class="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg">
+            Kirim
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- === SCRIPT: Logika Modal + Redirect + Rating === -->
   <script>
     const btnPilih = document.getElementById('btnPilih');
     const btnGabung = document.getElementById('btnGabung');
@@ -171,7 +239,55 @@
           "index.php?controller=userBooking&action=joinGroup&kode_kelompok=" + encodeURIComponent(kode);
       });
     }
+
+    // ⭐ RATING dari HOME
+    const ratingModalHome = document.getElementById('ratingModalHome');
+    const ratingCloseHome = document.getElementById('ratingCloseHome');
+    const ratingBookingIdHome = document.getElementById('rating_booking_id_home');
+    const ratingValueHome = document.getElementById('rating_value_home');
+    const ratingStarsHome = document.querySelectorAll('.rating-star-home');
+
+    // buka modal dari tombol di alert
+    document.querySelectorAll('.open-rating-modal-home').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        if (!id) return;
+
+        ratingBookingIdHome.value = id;
+        ratingValueHome.value = ''; // reset
+        ratingStarsHome.forEach(s => s.classList.add('opacity-30'));
+        ratingModalHome.classList.remove('hidden');
+      });
+    });
+
+    if (ratingCloseHome) {
+      ratingCloseHome.addEventListener('click', () => {
+        ratingModalHome.classList.add('hidden');
+      });
+    }
+
+    if (ratingStarsHome.length) {
+      ratingStarsHome.forEach(star => {
+        star.addEventListener('click', () => {
+          const value = star.dataset.value;
+          ratingValueHome.value = value;
+
+          ratingStarsHome.forEach(s => s.classList.add('opacity-30'));
+          star.classList.remove('opacity-30');
+        });
+      });
+    }
+
+    // tutup modal rating jika klik di luar box
+    if (ratingModalHome) {
+      ratingModalHome.addEventListener('click', (e) => {
+        if (e.target === ratingModalHome) {
+          ratingModalHome.classList.add('hidden');
+        }
+      });
+    }
   </script>
+
   <?php
   $footerPath = __DIR__ . '/../layout/footer.php';
   if (file_exists($footerPath)) {

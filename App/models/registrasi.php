@@ -123,36 +123,56 @@ class Registrasi extends Model
         $limit  = 10;
         $offset = ($page - 1) * $limit;
 
-        $sql = "SELECT * FROM registrasi WHERE 1";
+        // hanya pending + rejected
+        $where  = "WHERE status IN ('pending','rejected')";
+        $params = [];
 
-        if ($filter) {
-            $sql .= " AND status = :filter";
+        // kalau filter diisi (pending atau rejected), tambahkan
+        if (in_array($filter, ['pending', 'rejected'], true)) {
+            $where .= " AND status = :filter";
+            $params[':filter'] = $filter;
         }
 
-        if ($search) {
-            $sql .= " AND (nama LIKE :search OR email LIKE :search)";
+        // kalau search diisi, filter nama / email, tapi tetap hanya di pending+rejected
+        if ($search !== '') {
+            $where .= " AND (nama LIKE :search OR email LIKE :search)";
+            $params[':search'] = "%{$search}%";
         }
 
-        $sql .= " ORDER BY created_at DESC LIMIT $offset, $limit";
+        // data
+        $sql = "SELECT * FROM registrasi {$where}
+            ORDER BY created_at ASC
+            LIMIT :offset, :limit";
 
         $stmt = self::$db->prepare($sql);
 
-        if ($filter)  $stmt->bindValue(':filter', $filter);
-        if ($search)  $stmt->bindValue(':search', "%$search%");
+        foreach ($params as $key => $val) {
+            $stmt->bindValue($key, $val);
+        }
+        $stmt->bindValue(':offset', (int)$offset, PDO::PARAM_INT);
+        $stmt->bindValue(':limit',  (int)$limit,  PDO::PARAM_INT);
 
         $stmt->execute();
+        $list = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // total pages
-        $count = self::$db->query("SELECT COUNT(*) FROM registrasi")->fetchColumn();
+        // total rows (pakai where yang sama, tanpa limit)
+        $sqlCount = "SELECT COUNT(*) FROM registrasi {$where}";
+        $stmtCount = self::$db->prepare($sqlCount);
+        foreach ($params as $key => $val) {
+            $stmtCount->bindValue($key, $val);
+        }
+        $stmtCount->execute();
+        $count = (int)$stmtCount->fetchColumn();
 
         return [
-            'list'          => $stmt->fetchAll(),
-            'current_page'  => $page,
-            'total_pages'   => ceil($count / $limit),
-            'filter'        => $filter,
-            'search'        => $search
+            'list'         => $list,
+            'current_page' => $page,
+            'total_pages'  => max(1, ceil($count / $limit)),
+            'filter'       => $filter,
+            'search'       => $search,
         ];
     }
+
     public function updatePasswordByNimNip(string $nim_nip, string $hashedPassword): bool
     {
         $sql = "UPDATE " . self::$table . " 
