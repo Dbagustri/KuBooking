@@ -18,37 +18,28 @@ class BookingAdmin extends BookingBase
     public function getPendingForDashboard($limit = 10)
     {
         $sql = "
-            SELECT 
-                b.id_bookings,b.booking_code,
-                b.jumlah_anggota,b.start_time,
-                b.end_time,b.tanggal,
-                r.nama_ruangan,r.kapasitas_max,
-                acc.nama AS pj_nama,
-                bs.status
-            FROM Bookings b
-            LEFT JOIN Account acc ON b.id_pj = acc.id_account
-            LEFT JOIN Ruangan r ON b.id_ruangan = r.id_ruangan
-            LEFT JOIN Booking_status bs 
-                ON bs.id_status = (
-                    SELECT MAX(bs2.id_status) 
-                    FROM Booking_status bs2 
-                    WHERE bs2.id_bookings = b.id_bookings
-                )
-            WHERE bs.status = 'pending'
-            ORDER BY b.start_time ASC
-            LIMIT :limit
-        ";
+        SELECT 
+            id_bookings, booking_code, jumlah_anggota, start_time, 
+            end_time, tanggal, nama_ruangan, kapasitas_max, pj_nama, last_status
+        FROM v_admin_booking
+        WHERE last_status = 'pending'
+        ORDER BY start_time ASC
+        LIMIT :limit
+    ";
 
         $stmt = self::$db->prepare($sql);
         $stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
         $stmt->execute();
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
         $result = [];
         foreach ($rows as $row) {
             $start = strtotime($row['start_time']);
             $end   = strtotime($row['end_time']);
+
             $tanggalLabel = date('d M', strtotime($row['tanggal']));
             $jamLabel     = date('H:i', $start) . '–' . date('H:i', $end);
+
             $result[] = [
                 'id'        => $row['id_bookings'],
                 'kode'      => $row['booking_code'],
@@ -56,42 +47,32 @@ class BookingAdmin extends BookingBase
                 'ruang'     => $row['nama_ruangan'] ?? '-',
                 'waktu'     => $tanggalLabel . ', ' . $jamLabel,
                 'kapasitas' => ($row['jumlah_anggota'] ?? 0) . ' / ' . ($row['kapasitas_max'] ?? '-'),
-                'status'    => ucfirst($row['status'] ?? 'pending'),
+                'status'    => ucfirst($row['last_status'] ?? 'pending'),
             ];
         }
 
         return $result;
     }
+
     public function getAllForAdmin($limit = 200, $offset = 0)
     {
         $sql = "
         SELECT 
-            b.id_bookings,b.booking_code,
-            b.jumlah_anggota,b.start_time,
-            b.end_time,b.tanggal,
-            b.is_external,b.submitted,
-            b.guest_name,r.nama_ruangan,
-            r.kapasitas_max,r.lokasi,
-            acc.nama    AS pj_nama,
-            acc.nim_nip AS pj_nim,
-            bs_latest.status AS last_status
-        FROM Bookings b
-        LEFT JOIN Account acc ON b.id_pj = acc.id_account
-        LEFT JOIN Ruangan r   ON b.id_ruangan = r.id_ruangan
-        LEFT JOIN Booking_status bs_latest
-            ON bs_latest.id_status = (
-                SELECT MAX(bs2.id_status)
-                FROM Booking_status bs2
-                WHERE bs2.id_bookings = b.id_bookings
-            )
-        ORDER BY b.tanggal DESC, b.start_time DESC
+            id_bookings, booking_code, jumlah_anggota, start_time, 
+            end_time, tanggal, is_external, submitted, guest_name, 
+            guest_email, guest_phone, asal_instansi,
+            nama_ruangan, kapasitas_max, lokasi, pj_nama, pj_nim, last_status
+        FROM v_admin_booking
+        ORDER BY tanggal DESC, start_time DESC
         LIMIT :limit OFFSET :offset
     ";
+
         $stmt = self::$db->prepare($sql);
         $stmt->bindValue(':limit',  (int)$limit,  PDO::PARAM_INT);
         $stmt->bindValue(':offset', (int)$offset, PDO::PARAM_INT);
         $stmt->execute();
-        $rows   = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
         $result = [];
         foreach ($rows as $row) {
             $start = strtotime($row['start_time']);
@@ -99,10 +80,7 @@ class BookingAdmin extends BookingBase
             $tanggalLabel = date('d M', strtotime($row['tanggal']));
             $jamLabel     = date('H:i', $start) . '–' . date('H:i', $end);
             $pjName = $row['pj_nama'] ?: ($row['guest_name'] ?: '-');
-            $status = $row['last_status'];
-            if ($status === null) {
-                $status = ((int)$row['submitted'] === 1) ? 'pending' : 'draft';
-            }
+
             $result[] = [
                 'id'             => (int)$row['id_bookings'],
                 'kode'           => $row['booking_code'],
@@ -114,43 +92,41 @@ class BookingAdmin extends BookingBase
                 'tanggal'        => $row['tanggal'],
                 'kapasitas'      => ($row['jumlah_anggota'] ?? 0) . ' / ' . ($row['kapasitas_max'] ?? '-'),
                 'jumlah_anggota' => (int)($row['jumlah_anggota'] ?? 0),
-                'status'         => $status,
-                'tipe'           => ((int)$row['is_external'] === 1) ? 'eksternal' : 'internal',
+                'status'         => $row['last_status'],
+                'is_external'    => (int)$row['is_external'],
+                'submitted'      => (int)$row['submitted'],
+                'guest_name'     => $row['guest_name'] ?? null,
+                'guest_email'    => $row['guest_email'] ?? null,
+                'guest_phone'    => $row['guest_phone'] ?? null,
+                'asal_instansi'  => $row['asal_instansi'] ?? null,
+                'tipe'           => ((int)$row['is_external'] === 1) ? 'external' : 'internal',
             ];
         }
 
         return $result;
     }
+
+
     public function findAdminDetail($idBooking)
     {
         $sql = "
-            SELECT 
-                b.*,
-                r.nama_ruangan,r.lokasi,
-                r.kapasitas_min,r.kapasitas_max,
-                acc.nama  AS pj_nama,
-                acc.email AS pj_email,
-                (
-                    SELECT bs2.status
-                    FROM Booking_status bs2
-                    WHERE bs2.id_bookings = b.id_bookings
-                    ORDER BY bs2.created_at DESC, bs2.id_status DESC
-                    LIMIT 1
-                ) AS last_status
-            FROM Bookings b
-            LEFT JOIN Ruangan r ON r.id_ruangan = b.id_ruangan
-            LEFT JOIN Account acc ON acc.id_account = b.id_pj
-            WHERE b.id_bookings = :id
-            LIMIT 1
-        ";
+        SELECT *
+        FROM v_admin_booking
+        WHERE id_bookings = :id
+        LIMIT 1
+    ";
         $stmt = self::$db->prepare($sql);
         $stmt->execute(['id' => $idBooking]);
         $booking = $stmt->fetch(PDO::FETCH_ASSOC);
+
         if (!$booking) return null;
+
         $members = $this->getMembers($idBooking);
         $booking['members'] = $members;
+
         return $booking;
     }
+
     protected function generateBookingCode()
     {
         return substr(str_shuffle('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'), 0, 8);
@@ -158,9 +134,9 @@ class BookingAdmin extends BookingBase
     public function createInternalBooking(array $data): int
     {
         $idRuangan   = (int)($data['id_ruangan'] ?? 0);
-        $tanggal     = $data['tanggal'] ?? null;     // 'Y-m-d'
-        $jamMulai    = $data['jam_mulai'] ?? null;   // 'H:i'
-        $durasi      = (int)($data['durasi'] ?? 0);  // jam
+        $tanggal     = $data['tanggal'] ?? null;
+        $jamMulai    = $data['jam_mulai'] ?? null;
+        $durasi      = (int)($data['durasi'] ?? 0);
         $keperluan   = $data['keperluan'] ?? null;
         $members     = $data['members'] ?? [];
         $pjIdUser    = (int)($data['pj_id_user'] ?? 0);
@@ -270,31 +246,23 @@ class BookingAdmin extends BookingBase
         $asal       = $data['asal_instansi'] ?? null;
         $surat      = $data['surat_izin'] ?? null;
 
-        // Validasi dasar
         if (!$idRuangan || !$tanggal || !$jamMulai || !$durasi || !$guestName) {
             return false;
         }
-
-        // Durasi 1–3 jam
         if ($durasi < 1 || $durasi > 3) {
             return false;
         }
-
-        // Cek ruangan
         $roomModel = new \App\Models\Room();
         $room      = $roomModel->findById($idRuangan);
         if (!$room) {
             return false;
         }
-
         $kapMin = (int)($room['kapasitas_min'] ?? 0);
         $kapMax = (int)($room['kapasitas_max'] ?? 0);
 
         if ($jml <= 0) {
             $jml = 1;
         }
-
-        // Kapasitas: harus di antara kapMin dan kapMax (jika diset)
         if ($kapMax > 0) {
             if (($kapMin > 0 && $jml < $kapMin) || $jml > $kapMax) {
                 return false;
@@ -305,8 +273,6 @@ class BookingAdmin extends BookingBase
 
         $start = $tanggal . ' ' . $jamMulai . ':00';
         $end   = date('Y-m-d H:i:s', strtotime("$start +{$durasi} hour"));
-
-        // Cek bentrok
         if ($this->isBentrok($idRuangan, $start, $end)) {
             return false;
         }
@@ -343,56 +309,81 @@ class BookingAdmin extends BookingBase
         ]);
 
         $idBooking = self::$db->lastInsertId();
-
-        // Status awal: pending
         $this->addStatus($idBooking, 'approved');
 
         return $idBooking;
     }
-
-
     public function updateAdminBooking(array $data, array $memberIds = []): bool
     {
         self::$db->beginTransaction();
 
         try {
-            $sql = "UPDATE bookings
-                SET id_ruangan = :id_ruangan,
-                    start_time = :start_time,
-                    end_time   = :end_time,
-                    tanggal    = :tanggal,
-                    jumlah_anggota = :jumlah_anggota,
-                    keperluan  = :keperluan
-                WHERE id_bookings = :id_booking";
+            $idBooking = (int)($data['id_booking'] ?? 0);
+            $idRuangan = (int)($data['id_ruangan'] ?? 0);
+            $tanggal   = $data['tanggal'] ?? null;
+            $jamMulai  = $data['jam_mulai'] ?? null;
+            $durasi    = (int)($data['durasi'] ?? 0);
+            $keperluan = $data['keperluan'] ?? '';
+            if ($idBooking <= 0 || $idRuangan <= 0 || !$tanggal || !$jamMulai || $durasi <= 0) {
+                self::$db->rollBack();
+                return false;
+            }
+            $start = $tanggal . ' ' . $jamMulai . ':00';
+            $end   = date('Y-m-d H:i:s', strtotime($start . " + {$durasi} hour"));
+            if ($this->isBentrokExcept($idRuangan, $start, $end, $idBooking)) {
+                self::$db->rollBack();
+                return false;
+            }
 
-            $start = $data['tanggal'] . ' ' . $data['jam_mulai'] . ':00';
-            $end   = date('Y-m-d H:i:s', strtotime($start . " + {$data['durasi']} hour"));
+            if (empty($memberIds)) {
+                self::$db->rollBack();
+                return false;
+            }
+
+            $jumlahAnggota = count($memberIds);
+            $sql = "UPDATE bookings
+                SET id_ruangan      = :id_ruangan,
+                    start_time      = :start_time,
+                    end_time        = :end_time,
+                    tanggal         = :tanggal,
+                    jumlah_anggota  = :jumlah_anggota,
+                    keperluan       = :keperluan
+                WHERE id_bookings   = :id_booking";
 
             $stmt = self::$db->prepare($sql);
             $stmt->execute([
-                'id_ruangan'      => (int)$data['id_ruangan'],
-                'start_time'      => $start,
-                'end_time'        => $end,
-                'tanggal'         => $data['tanggal'],
-                'jumlah_anggota'  => (int)$data['jumlah_anggota'],
-                'keperluan'       => $data['keperluan'],
-                'id_booking'      => (int)$data['id_booking'],
+                'id_ruangan'     => $idRuangan,
+                'start_time'     => $start,
+                'end_time'       => $end,
+                'tanggal'        => $tanggal,
+                'jumlah_anggota' => $jumlahAnggota,
+                'keperluan'      => $keperluan,
+                'id_booking'     => $idBooking,
             ]);
-            if (!empty($memberIds)) {
-                $idBooking = (int)$data['id_booking'];
-                $del = self::$db->prepare("DELETE FROM Booking_member WHERE id_bookings = :id");
-                $del->execute(['id' => $idBooking]);
-                $ins = self::$db->prepare("
-                INSERT INTO Booking_member (id_bookings, id_user) 
-                VALUES (:id_bookings, :id_user)
-            ");
+            $del = self::$db->prepare("DELETE FROM Booking_member WHERE id_bookings = :id");
+            $del->execute(['id' => $idBooking]);
+            $ins = self::$db->prepare("
+            INSERT INTO Booking_member (id_bookings, id_user)
+            VALUES (:id_bookings, :id_user)
+        ");
 
-                foreach ($memberIds as $uid) {
-                    $ins->execute([
-                        'id_bookings' => $idBooking,
-                        'id_user'     => (int)$uid,
-                    ]);
-                }
+            foreach ($memberIds as $uid) {
+                $ins->execute([
+                    'id_bookings' => $idBooking,
+                    'id_user'     => (int)$uid,
+                ]);
+            }
+            $firstPj = (int)$memberIds[0];
+            if ($firstPj > 0) {
+                $upPj = self::$db->prepare("
+                UPDATE bookings
+                SET id_pj = :id_pj
+                WHERE id_bookings = :id_booking
+            ");
+                $upPj->execute([
+                    'id_pj'      => $firstPj,
+                    'id_booking' => $idBooking,
+                ]);
             }
 
             self::$db->commit();
@@ -402,7 +393,6 @@ class BookingAdmin extends BookingBase
             return false;
         }
     }
-
     public function autoCancelLateArrivals()
     {
         $sql = "
@@ -622,35 +612,19 @@ class BookingAdmin extends BookingBase
         $offset = ($page - 1) * $limit;
         $sqlCount = "
         SELECT COUNT(*)
-        FROM " . self::$table . " b
-        LEFT JOIN Booking_status bs 
-            ON bs.id_status = (
-                SELECT MAX(bs2.id_status)
-                FROM Booking_status bs2
-                WHERE bs2.id_bookings = b.id_bookings
-            )
-        WHERE bs.status = 'pending'
+        FROM v_admin_booking
+        WHERE last_status = 'pending'
     ";
-        $stmtCount = self::$db->prepare($sqlCount);
-        $stmtCount->execute();
-        $totalRows  = (int)$stmtCount->fetchColumn();
+        $stmtCount = self::$db->query($sqlCount);
+        $totalRows = (int)$stmtCount->fetchColumn();
         $totalPages = $totalRows > 0 ? (int)ceil($totalRows / $limit) : 1;
         $sql = "
         SELECT 
-            b.id_bookings,b.booking_code,b.jumlah_anggota,
-            b.start_time,b.end_time,b.tanggal,r.nama_ruangan,
-            r.kapasitas_max,acc.nama AS pj_nama,bs.status
-        FROM " . self::$table . " b
-        LEFT JOIN Account acc ON b.id_pj = acc.id_account
-        LEFT JOIN Ruangan r ON b.id_ruangan = r.id_ruangan
-        LEFT JOIN Booking_status bs 
-            ON bs.id_status = (
-                SELECT MAX(bs2.id_status) 
-                FROM Booking_status bs2 
-                WHERE bs2.id_bookings = b.id_bookings
-            )
-        WHERE bs.status = 'pending'
-        ORDER BY b.start_time ASC
+            id_bookings, booking_code, jumlah_anggota, start_time, 
+            end_time, tanggal, nama_ruangan, kapasitas_max, pj_nama, last_status
+        FROM v_admin_booking
+        WHERE last_status = 'pending'
+        ORDER BY start_time ASC
         LIMIT :limit OFFSET :offset
     ";
 
@@ -658,7 +632,6 @@ class BookingAdmin extends BookingBase
         $stmt->bindValue(':limit',  $limit,  PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
-
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $result = [];
@@ -676,16 +649,17 @@ class BookingAdmin extends BookingBase
                 'ruang'     => $row['nama_ruangan'] ?? '-',
                 'waktu'     => $tanggalLabel . ', ' . $jamLabel,
                 'kapasitas' => ($row['jumlah_anggota'] ?? 0) . ' / ' . ($row['kapasitas_max'] ?? '-'),
-                'status'    => ucfirst($row['status'] ?? 'pending'),
+                'status'    => ucfirst($row['last_status'] ?? 'pending'),
             ];
         }
 
         return [
-            'list'          => $result,
-            'current_page'  => $page,
-            'total_pages'   => $totalPages,
+            'list'         => $result,
+            'current_page' => $page,
+            'total_pages'  => $totalPages,
         ];
     }
+
     public function autoCancelLateBookings(): int
     {
         $sql = "
@@ -729,18 +703,82 @@ class BookingAdmin extends BookingBase
     public function countAllForAdmin(): int
     {
         $sql = "
-        SELECT COUNT(*) AS total
+        SELECT COUNT(*)
+        FROM v_admin_booking
+        -- kalau mau exclude draft:
+        -- WHERE last_status <> 'draft'
+    ";
+        $stmt = self::$db->query($sql);
+        return (int)$stmt->fetchColumn();
+    }
+
+    public function hasAnyUpcomingBookings(): bool
+    {
+        $sql = "
+        SELECT b.id_bookings
         FROM bookings b
-        LEFT JOIN ruangan r ON r.id_ruangan = b.id_ruangan
-        LEFT JOIN account a ON a.id_account = b.id_pj
-        -- kalau di getAllForAdmin kamu pakai WHERE tertentu (misal exclude draft),
-        -- samakan di sini juga supaya konsisten
-        -- WHERE b.submitted = 1
+        LEFT JOIN Booking_status bs_latest
+            ON bs_latest.id_status = (
+                SELECT MAX(bs2.id_status)
+                FROM Booking_status bs2
+                WHERE bs2.id_bookings = b.id_bookings
+            )
+        WHERE 
+            b.tanggal >= CURDATE()
+            AND (
+                b.submitted = 1
+                OR b.group_expire_at IS NULL
+                OR b.group_expire_at >= NOW()
+            )
+            AND (
+                bs_latest.status IS NULL
+                OR bs_latest.status NOT IN ('rejected','cancelled')
+            )
+        LIMIT 1
     ";
 
         $stmt = self::$db->query($sql);
-        $row  = $stmt->fetch(\PDO::FETCH_ASSOC);
+        return (bool)$stmt->fetch(\PDO::FETCH_ASSOC);
+    }
 
-        return (int)($row['total'] ?? 0);
+
+    public function cancelAllUpcomingBookings(): int
+    {
+        $sql = "
+        SELECT b.id_bookings
+        FROM bookings b
+        LEFT JOIN Booking_status bs_latest
+            ON bs_latest.id_status = (
+                SELECT MAX(bs2.id_status)
+                FROM Booking_status bs2
+                WHERE bs2.id_bookings = b.id_bookings
+            )
+        WHERE 
+            b.tanggal >= CURDATE()
+            AND (
+                b.submitted = 1
+                OR b.group_expire_at IS NULL
+                OR b.group_expire_at >= NOW()
+            )
+            AND (
+                bs_latest.status IS NULL
+                OR bs_latest.status NOT IN ('rejected','cancelled')
+            )
+    ";
+
+        $stmt = self::$db->query($sql);
+        $bookings = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+
+        $count = 0;
+        foreach ($bookings as $idBooking) {
+            $this->addStatus(
+                (int)$idBooking,
+                'cancelled',
+                'Dibatalkan karena penutupan semua ruangan.'
+            );
+            $count++;
+        }
+
+        return $count;
     }
 }

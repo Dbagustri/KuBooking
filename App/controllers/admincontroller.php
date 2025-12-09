@@ -118,7 +118,6 @@ class AdminController extends Controller
     private function deriveAcademicData(array $reg, string $role): array
     {
         $nowYear = (int) date('Y');
-
         if ($role === 'mahasiswa') {
             $nimDigits = preg_replace('/\D/', '', $reg['nim_nip']);
 
@@ -494,21 +493,40 @@ class AdminController extends Controller
     {
         Auth::requireRole(['admin', 'super_admin']);
 
-        $roomModel = new Room();
+        $roomModel    = new Room();
+        $bookingModel = new \App\Models\BookingAdmin();
+
+        // Kalau saat ini MASIH ADA ruangan aktif → tombol berarti "OFF"
         if ($roomModel->anyActive()) {
+            $today = date('Y-m-d');
+
+            // Batalkan semua booking pada hari ini
+            // (method ini sudah ada & dipakai di closeDate)
+            $count = $bookingModel->cancelBookingsByDate($today);
+
+            // Nonaktifkan semua ruangan
             $roomModel->setAllStatus('nonaktif');
+
             $this->redirectWithMessage(
                 'index.php?controller=admin&action=ruangan',
-                'Semua ruangan telah dinonaktifkan.'
+                "Semua ruangan dinonaktifkan. {$count} booking pada tanggal {$today} dibatalkan.",
+                'success'
             );
-        } else {
-            $roomModel->setAllStatus('aktif');
-            $this->redirectWithMessage(
-                'index.php?controller=admin&action=ruangan',
-                'Semua ruangan telah diaktifkan.'
-            );
+            return;
         }
+
+        // Kalau semua ruangan sedang nonaktif → tombol berarti "ON"
+        $roomModel->setAllStatus('aktif');
+
+        $this->redirectWithMessage(
+            'index.php?controller=admin&action=ruangan',
+            'Semua ruangan telah diaktifkan.',
+            'success'
+        );
     }
+
+
+
     public function editRoom()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -693,7 +711,6 @@ class AdminController extends Controller
             'user' => $user,
         ]);
     }
-    // di AdminController
 
     public function detailRegistrasi()
     {

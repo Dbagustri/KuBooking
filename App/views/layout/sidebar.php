@@ -42,6 +42,10 @@ $userRole = $_SESSION['user']['role'] ?? ($_SESSION['role'] ?? null);
       <li class="<?= ($_GET['action'] ?? '') === 'anggota' ? 'bg-[#396b9c]' : '' ?>">
         <a href="index.php?controller=admin&action=anggota" class="block px-6 py-3">Anggota</a>
       </li>
+      <!-- feedback -->
+      <li class="<?= ($_GET['controller'] ?? '') === 'userFeedback' ? 'bg-[#396b9c]' : '' ?>">
+        <a href="index.php?controller=userFeedback&action=adminIndex" class="block px-6 py-3">Feedback</a>
+      </li>
 
       <!-- LAPORAN -->
       <li class="<?= ($_GET['action'] ?? '') === 'laporan' ? 'bg-[#396b9c]' : '' ?>">

@@ -22,7 +22,7 @@
     $totalPages   = $total_pages  ?? 1;
     $filter       = $filter       ?? '';
     $search       = $search       ?? '';
-    $currentLogin = \App\Core\Auth::user();
+    $currentLogin = \App\Core\Auth::user() ?? [];
     ?>
 
     <div class="flex-1 flex flex-col h-screen overflow-y-auto">
@@ -73,7 +73,6 @@
                             class="flex-1 text-sm bg-transparent focus:outline-none">
                     </div>
                 </div>
-
                 <!-- BUTTON -->
                 <button type="submit"
                     class="mt-1 lg:mt-0 w-full lg:w-28 rounded-full bg-[#1e3a5f] px-4 py-2
@@ -101,25 +100,36 @@
 
                     <tbody>
                         <?php if (!empty($users)): ?>
+                            <?php
+                            // mapping class role sekali saja
+                            $roleBadgeMap = [
+                                'mahasiswa'   => 'bg-blue-50 text-blue-700',
+                                'dosen'       => 'bg-purple-50 text-purple-700',
+                                'tendik'      => 'bg-amber-50 text-amber-700',
+                                'admin'       => 'bg-slate-100 text-slate-800',
+                                'super_admin' => 'bg-rose-50 text-rose-700',
+                            ];
+
+                            $statusBadgeMap = [
+                                'aktif'    => 'bg-green-100 text-green-800',
+                                'nonaktif' => 'bg-red-100 text-red-800',
+                            ];
+
+                            $currentLoginId   = (int)($currentLogin['id_account'] ?? 0);
+                            $currentLoginRole = $currentLogin['role'] ?? null;
+                            ?>
                             <?php foreach ($users as $i => $u): ?>
                                 <?php
-                                $id         = (int)($u['id_account'] ?? 0);
-                                $status     = $u['status_aktif'] ?? 'nonaktif';
-                                $jurusan    = $u['jurusan'] ?? ($u['unit_jurusan'] ?? '-');
-                                $nimNip     = $u['nim_nip'] ?? '-';
-                                $role       = $u['role'] ?? '-';
+                                $id      = (int)($u['id_account'] ?? 0);
+                                $status  = $u['status_aktif'] ?? 'nonaktif';
+                                $jurusan = $u['jurusan'] ?? ($u['unit_jurusan'] ?? '-');
+                                $nimNip  = $u['nim_nip'] ?? '-';
+                                $role    = $u['role'] ?? '-';
 
-                                // badge status
-                                $badgeMap = [
-                                    'aktif'    => 'bg-green-100 text-green-800',
-                                    'nonaktif' => 'bg-red-100 text-red-800',
-                                ];
-                                $badgeClass = $badgeMap[$status] ?? 'bg-gray-100 text-gray-800';
+                                $badgeClass = $statusBadgeMap[$status] ?? 'bg-gray-100 text-gray-800';
+                                $roleClass  = $roleBadgeMap[$role]    ?? 'bg-gray-100 text-gray-700';
 
-                                // badge role
-                                $roleClass =
-                                    $role === 'mahasiswa'   ? 'bg-blue-50 text-blue-700'   : ($role === 'dosen'      ? 'bg-purple-50 text-purple-700' : ($role === 'tendik'     ? 'bg-amber-50 text-amber-700' : ($role === 'admin'      ? 'bg-slate-100 text-slate-800' : ($role === 'super_admin' ? 'bg-rose-50 text-rose-700' :
-                                        'bg-gray-100 text-gray-700'))));
+                                $isSelf = $id === $currentLoginId;
                                 ?>
                                 <tr class="<?= $i % 2 === 0 ? 'bg-gray-50' : 'bg-gray-100'; ?> text-sm text-gray-800 border-b">
 
@@ -189,33 +199,33 @@
                                                     Detail
                                                 </a>
 
-                                                <!-- AKTIF / NONAKTIF -->
-                                                <?php if ($status === 'aktif'): ?>
-                                                    <form action="index.php?controller=admin&action=setUserStatus"
-                                                        method="POST"
-                                                        onsubmit="return confirm('Nonaktifkan user ini? User tidak dapat melakukan booking.');">
-                                                        <input type="hidden" name="id_user" value="<?= $id ?>">
-                                                        <input type="hidden" name="status" value="nonaktif">
-                                                        <button type="submit"
-                                                            class="w-full text-left px-4 py-2 text-red-700 hover:bg-red-50">
-                                                            Nonaktifkan
-                                                        </button>
-                                                    </form>
-                                                <?php else: ?>
-                                                    <form action="index.php?controller=admin&action=setUserStatus"
-                                                        method="POST"
-                                                        onsubmit="return confirm('Aktifkan kembali user ini?');">
-                                                        <input type="hidden" name="id_user" value="<?= $id ?>">
-                                                        <input type="hidden" name="status" value="aktif">
-                                                        <button type="submit"
-                                                            class="w-full text-left px-4 py-2 text-green-700 hover:bg-green-50">
-                                                            Aktifkan
-                                                        </button>
-                                                    </form>
-                                                <?php endif; ?>
+                                                <?php if (!$isSelf): ?>
+                                                    <!-- AKTIF / NONAKTIF -->
+                                                    <?php if ($status === 'aktif'): ?>
+                                                        <form action="index.php?controller=admin&action=setUserStatus"
+                                                            method="POST"
+                                                            onsubmit="return confirm('Nonaktifkan user ini? User tidak dapat melakukan booking.');">
+                                                            <input type="hidden" name="id_user" value="<?= $id ?>">
+                                                            <input type="hidden" name="status" value="nonaktif">
+                                                            <button type="submit"
+                                                                class="w-full text-left px-4 py-2 text-red-700 hover:bg-red-50">
+                                                                Nonaktifkan
+                                                            </button>
+                                                        </form>
+                                                    <?php else: ?>
+                                                        <form action="index.php?controller=admin&action=setUserStatus"
+                                                            method="POST"
+                                                            onsubmit="return confirm('Aktifkan kembali user ini?');">
+                                                            <input type="hidden" name="id_user" value="<?= $id ?>">
+                                                            <input type="hidden" name="status" value="aktif">
+                                                            <button type="submit"
+                                                                class="w-full text-left px-4 py-2 text-green-700 hover:bg-green-50">
+                                                                Aktifkan
+                                                            </button>
+                                                        </form>
+                                                    <?php endif; ?>
 
-                                                <!-- DELETE (jangan tampilkan kalau user yang login sendiri) -->
-                                                <?php if (empty($currentLogin['id_account']) || (int)$currentLogin['id_account'] !== $id): ?>
+                                                    <!-- DELETE (jangan tampilkan kalau user yang login sendiri) -->
                                                     <form action="index.php?controller=admin&action=deleteUser"
                                                         method="POST"
                                                         onsubmit="return confirm('Yakin ingin menghapus user ini? Tindakan ini tidak dapat dibatalkan.');">
@@ -249,7 +259,6 @@
             <!-- PAGINATION -->
             <?php if ($totalPages > 1): ?>
                 <div class="flex justify-center mt-6 space-x-1 text-sm">
-
                     <!-- Prev -->
                     <?php if ($currentPage > 1): ?>
                         <a href="index.php?controller=admin&action=anggota&page=<?= $currentPage - 1 ?>&filter=<?= urlencode($filter) ?>&q=<?= urlencode($search) ?>"
@@ -257,14 +266,12 @@
                     <?php else: ?>
                         <span class="px-3 py-1 rounded bg-gray-100 text-gray-400 cursor-not-allowed">&lt;</span>
                     <?php endif; ?>
-
                     <?php for ($i = 1; $i <= $totalPages; $i++): ?>
                         <a href="index.php?controller=admin&action=anggota&page=<?= $i ?>&filter=<?= urlencode($filter) ?>&q=<?= urlencode($search) ?>"
                             class="px-3 py-1 rounded <?= $i == $currentPage ? 'bg-[#1e3a5f] text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700' ?>">
                             <?= $i ?>
                         </a>
                     <?php endfor; ?>
-
                     <!-- Next -->
                     <?php if ($currentPage < $totalPages): ?>
                         <a href="index.php?controller=admin&action=anggota&page=<?= $currentPage + 1 ?>&filter=<?= urlencode($filter) ?>&q=<?= urlencode($search) ?>"
@@ -272,7 +279,6 @@
                     <?php else: ?>
                         <span class="px-3 py-1 rounded bg-gray-100 text-gray-400 cursor-not-allowed">&gt;</span>
                     <?php endif; ?>
-
                 </div>
             <?php endif; ?>
 

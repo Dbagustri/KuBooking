@@ -8,19 +8,13 @@
 </head>
 
 <body class="bg-[#f2f7fc] text-gray-800 flex">
-
-    <!-- SIDEBAR -->
     <?php
     $sidebarPath = __DIR__ . '/../layout/sidebar.php';
     if (file_exists($sidebarPath)) {
         include $sidebarPath;
     }
     ?>
-
-    <!-- KONTEN -->
     <div class="flex-1 flex flex-col h-screen overflow-y-auto">
-
-        <!-- NAVBAR -->
         <div class="m-4">
             <?php
             $navPath = __DIR__ . '/../layout/nav-admin.php';
@@ -31,7 +25,6 @@
         </div>
 
         <?php
-        // Data dari controller
         $rooms        = $rooms        ?? [];
         $search       = $search       ?? '';
         $statusFilter = $status       ?? 'all';
@@ -42,7 +35,7 @@
         $btnLabel    = $anyActive ? 'Nonaktifkan Semua (OFF)' : 'Aktifkan Semua (ON)';
         $btnColor    = $anyActive ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700';
         $confirmText = $anyActive
-            ? 'Yakin ingin menonaktifkan seluruh ruangan?'
+            ? 'Yakin ingin menonaktifkan seluruh ruangan? Jika masih ada peminjaman hari ini, semua booking pada hari ini akan dibatalkan.'
             : 'Aktifkan semua ruangan?';
         ?>
 

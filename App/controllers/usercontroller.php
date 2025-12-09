@@ -85,10 +85,9 @@ class UserController extends Controller
         $bookingModel = new BookingUser();
         $user         = Auth::user();
         $idUser       = $user['id_account'] ?? null;
-
         $booking_aktif = $idUser ? $bookingModel->getActiveBookingForUser($idUser) : null;
-
-        $canBook        = Auth::isActive();
+        $unrated = $idUser ? $bookingModel->getUnratedFinishedBookingForUser($idUser) : null;
+        $canBook = Auth::isActive() && !$booking_aktif && !$unrated;
         $buttonDisabled = (!$canBook || !empty($booking_aktif));
 
         $this->view('user/detailroom', [

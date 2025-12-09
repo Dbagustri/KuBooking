@@ -37,7 +37,6 @@ class AdminBookingController extends Controller
         ]);
     }
 
-
     public function detail()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -217,23 +216,17 @@ class AdminBookingController extends Controller
         $bookingModel = new BookingAdmin();
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-
-            // --- Ambil input dasar ---
             $idRuangan     = $this->input('id_ruangan');
             $tanggal       = $this->input('tanggal');
             $jamMulai      = $this->input('jam_mulai');
             $durasi        = (int) $this->input('durasi');
             $jumlahAnggota = (int) $this->input('jumlah_anggota');
             $keperluan     = $this->input('keperluan');
-
-            // Support nama field dari view: guest_name atau nama_peminjam
             $guestName  = $this->input('guest_name')  ?: $this->input('nama_peminjam');
             $guestEmail = $this->input('guest_email') ?: $this->input('email_peminjam');
             $guestPhone = $this->input('guest_phone') ?: $this->input('no_hp');
-
             $asalInstansi = $this->input('asal_instansi');
 
-            // --- Validasi dasar field wajib ---
             if (
                 !$idRuangan ||
                 !$tanggal ||
@@ -248,7 +241,6 @@ class AdminBookingController extends Controller
                 );
             }
 
-            // --- Validasi ruangan ada ---
             if (!ctype_digit((string)$idRuangan)) {
                 return $this->redirectWithMessage(
                     'index.php?controller=adminBooking&action=createExternal',
@@ -266,7 +258,6 @@ class AdminBookingController extends Controller
                 );
             }
 
-            // --- Validasi tanggal (format & tidak lewat) ---
             $today = date('Y-m-d');
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $tanggal) || $tanggal < $today) {
                 return $this->redirectWithMessage(
@@ -275,8 +266,6 @@ class AdminBookingController extends Controller
                     'error'
                 );
             }
-
-            // --- Validasi jam & durasi ---
             if (!preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $jamMulai)) {
                 return $this->redirectWithMessage(
                     'index.php?controller=adminBooking&action=createExternal',
@@ -284,8 +273,6 @@ class AdminBookingController extends Controller
                     'error'
                 );
             }
-
-            // durasi 1–3 jam
             if ($durasi < 1 || $durasi > 3) {
                 return $this->redirectWithMessage(
                     'index.php?controller=adminBooking&action=createExternal',
@@ -293,8 +280,6 @@ class AdminBookingController extends Controller
                     'error'
                 );
             }
-
-            // Hitung start/end time untuk validasi jam sekarang (opsional)
             $startDateTime = \DateTime::createFromFormat('Y-m-d H:i', $tanggal . ' ' . substr($jamMulai, 0, 5));
             if (!$startDateTime) {
                 return $this->redirectWithMessage(
@@ -305,8 +290,6 @@ class AdminBookingController extends Controller
             }
             $endDateTime = clone $startDateTime;
             $endDateTime->modify('+' . $durasi . ' hour');
-
-            // Kalau tanggal hari ini, jam mulai tidak boleh di masa lalu
             $now = new \DateTime();
             if ($tanggal === $today && $startDateTime <= $now) {
                 return $this->redirectWithMessage(
@@ -315,8 +298,6 @@ class AdminBookingController extends Controller
                     'error'
                 );
             }
-
-            // --- Validasi kapasitas vs jumlah anggota ---
             $kapMin = (int)($ruangan['kapasitas_min'] ?? 0);
             $kapMax = (int)($ruangan['kapasitas_max'] ?? 0);
 
@@ -339,8 +320,6 @@ class AdminBookingController extends Controller
                     'error'
                 );
             }
-
-            // --- Upload surat izin (opsional) ---
             $suratIzinPath = null;
             if (!empty($_FILES['surat_izin']) && $_FILES['surat_izin']['error'] !== UPLOAD_ERR_NO_FILE) {
                 if ($_FILES['surat_izin']['error'] !== UPLOAD_ERR_OK) {
@@ -362,7 +341,7 @@ class AdminBookingController extends Controller
                     );
                 }
 
-                if ($_FILES['surat_izin']['size'] > 5 * 1024 * 1024) { // 5 MB
+                if ($_FILES['surat_izin']['size'] > 5 * 1024 * 1024) {
                     return $this->redirectWithMessage(
                         'index.php?controller=adminBooking&action=createExternal',
                         'Ukuran file surat izin maksimal 5MB.',
@@ -389,12 +368,10 @@ class AdminBookingController extends Controller
 
                 $suratIzinPath = 'uploads/surat_izin/' . $filename;
             }
-
-            // --- Siapkan data untuk model ---
             $data = [
                 'id_ruangan'      => (int) $idRuangan,
                 'tanggal'         => $tanggal,
-                'jam_mulai'       => substr($jamMulai, 0, 5), // simpan HH:MM
+                'jam_mulai'       => substr($jamMulai, 0, 5),
                 'durasi'          => $durasi,
                 'jumlah_anggota'  => $jumlahAnggota,
                 'keperluan'       => $keperluan,
@@ -405,7 +382,6 @@ class AdminBookingController extends Controller
                 'surat_izin'      => $suratIzinPath,
             ];
 
-            // Model createExternalBooking cek bentrok + kapasitas + set status pending
             $idBooking = $bookingModel->createExternalBooking($data);
 
             if (!$idBooking) {
@@ -418,7 +394,7 @@ class AdminBookingController extends Controller
 
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=manage',
-                'Booking eksternal berhasil dibuat (status pending).'
+                'Booking eksternal berhasil dibuat.'
             );
         }
 
@@ -441,7 +417,6 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-
         $bookingModel = new BookingAdmin();
         $roomModel    = new Room();
 
@@ -454,51 +429,95 @@ class AdminBookingController extends Controller
             );
         }
         $members = $bookingModel->getMembers((int)$id);
+        $rooms   = $roomModel->getAllActive();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->view('admin/booking-edit', [
+                'booking' => $booking,
+                'rooms'   => $rooms,
+                'members' => $members,
+            ]);
+            return;
+        }
+        $idRuangan = $this->input('id_ruangan');
+        $tanggal   = $this->input('tanggal');
+        $jamMulai  = $this->input('jam_mulai');
+        $durasi    = (int)$this->input('durasi');
+        $keperluan = $this->input('keperluan');
 
-        $rooms = $roomModel->getAllActive();
+        $memberIds = array_map('intval', $_POST['members'] ?? []);
+        $memberIds = array_values(array_unique(array_filter($memberIds)));
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $idRuangan     = $this->input('id_ruangan');
-            $tanggal       = $this->input('tanggal');
-            $jamMulai      = $this->input('jam_mulai');
-            $durasi        = (int)$this->input('durasi');
-            $jumlahAnggota = (int)$this->input('jumlah_anggota');
-            $keperluan     = $this->input('keperluan');
-
-            $memberIds = array_map('intval', $_POST['members'] ?? []);
-
-            $dataUpdate = [
-                'id_booking'      => (int)$id,
-                'id_ruangan'      => $idRuangan ?: $booking['id_ruangan'],
-                'tanggal'         => $tanggal ?: $booking['tanggal'],
-                'jam_mulai'       => $jamMulai ?: date('H:i', strtotime($booking['start_time'])),
-                'durasi'          => $durasi > 0 ? $durasi : 1,
-                'jumlah_anggota'  => max(1, $jumlahAnggota),
-                'keperluan'       => $keperluan !== null ? $keperluan : $booking['keperluan'],
-            ];
-
-            $ok = $bookingModel->updateAdminBooking($dataUpdate, $memberIds);
-
-            if (!$ok) {
-                return $this->redirectWithMessage(
-                    "index.php?controller=adminBooking&action=edit&id={$id}",
-                    'Gagal mengupdate booking (kemungkinan jadwal bentrok).',
-                    'error'
-                );
-            }
-
+        if (empty($memberIds)) {
             return $this->redirectWithMessage(
-                'index.php?controller=adminBooking&action=manage',
-                'Booking berhasil diperbarui.'
+                "index.php?controller=adminBooking&action=edit&id={$id}",
+                'Minimal 1 anggota harus ada pada booking.',
+                'error'
             );
         }
 
-        $this->view('admin/booking-edit', [
-            'booking' => $booking,
-            'rooms'   => $rooms,
-            'members' => $members,
-        ]);
+        $idRuangan = $idRuangan && ctype_digit((string)$idRuangan)
+            ? (int)$idRuangan
+            : (int)$booking['id_ruangan'];
+
+        $tanggal = $tanggal ?: date('Y-m-d', strtotime($booking['tanggal']));
+        $jamMulai = $jamMulai ?: date('H:i', strtotime($booking['start_time']));
+        $durasi = $durasi > 0 ? $durasi : 1;
+        if ($durasi > 3) {
+            $durasi = 3;
+        }
+
+        $keperluan = $keperluan !== null ? $keperluan : ($booking['keperluan'] ?? '');
+        $room = $roomModel->findById($idRuangan);
+        if (!$room) {
+            return $this->redirectWithMessage(
+                "index.php?controller=adminBooking&action=edit&id={$id}",
+                'Ruangan tidak ditemukan.',
+                'error'
+            );
+        }
+        $kapMin = (int)($room['kapasitas_min'] ?? 0);
+        $kapMax = (int)($room['kapasitas_max'] ?? 0);
+        $jumlahAnggota = count($memberIds);
+
+        if ($kapMin > 0 && $jumlahAnggota < $kapMin) {
+            return $this->redirectWithMessage(
+                "index.php?controller=adminBooking&action=edit&id={$id}",
+                'Jumlah anggota kurang dari kapasitas minimum ruangan (' . $kapMin . ').',
+                'error'
+            );
+        }
+        if ($kapMax > 0 && $jumlahAnggota > $kapMax) {
+            return $this->redirectWithMessage(
+                "index.php?controller=adminBooking&action=edit&id={$id}",
+                'Jumlah anggota melebihi kapasitas maksimum ruangan (' . $kapMax . ').',
+                'error'
+            );
+        }
+        $dataUpdate = [
+            'id_booking' => (int)$id,
+            'id_ruangan' => $idRuangan,
+            'tanggal'    => $tanggal,
+            'jam_mulai'  => $jamMulai,
+            'durasi'     => $durasi,
+            'keperluan'  => $keperluan,
+        ];
+
+        $ok = $bookingModel->updateAdminBooking($dataUpdate, $memberIds);
+
+        if (!$ok) {
+            return $this->redirectWithMessage(
+                "index.php?controller=adminBooking&action=edit&id={$id}",
+                'Gagal mengupdate booking (jadwal bentrok atau data tidak valid).',
+                'error'
+            );
+        }
+
+        return $this->redirectWithMessage(
+            'index.php?controller=adminBooking&action=manage',
+            'Booking berhasil diperbarui.'
+        );
     }
+
 
 
     public function delete()
@@ -597,7 +616,7 @@ class AdminBookingController extends Controller
         return $this->redirectWithMessage(
             'index.php?controller=adminBooking&action=manage',
             'Booking berhasil ditolak.',
-            'error'
+            'success'
         );
     }
 
@@ -606,9 +625,9 @@ class AdminBookingController extends Controller
     {
         Auth::requireRole(['admin', 'super_admin']);
 
-        $idBooking = $_POST['id_booking'] ?? null;
+        $idBookingRaw = $_POST['id_booking'] ?? null;
 
-        if (!$idBooking || !ctype_digit((string)$idBooking)) {
+        if (!$idBookingRaw || !ctype_digit((string)$idBookingRaw)) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=manage',
                 'ID booking tidak ditemukan.',
@@ -616,16 +635,19 @@ class AdminBookingController extends Controller
             );
         }
 
+        $idBooking = (int)$idBookingRaw;
+        $detailUrl = 'index.php?controller=adminBooking&action=detail&id=' . $idBooking;
         $bookingModel = new BookingAdmin();
-        $idBooking    = (int)$idBooking;
-        $lastStatus = $bookingModel->getLastStatus($idBooking);
+        $lastStatus   = $bookingModel->getLastStatus($idBooking);
+
         if (!in_array($lastStatus, ['approved', 'reschedule_approved'], true)) {
             return $this->redirectWithMessage(
-                'index.php?controller=adminBooking&action=manage',
+                $detailUrl,
                 'Booking hanya dapat dimulai jika sudah disetujui (APPROVED).',
                 'error'
             );
         }
+
         $booking = $bookingModel->findWithRoom($idBooking);
         if (!$booking) {
             return $this->redirectWithMessage(
@@ -637,17 +659,18 @@ class AdminBookingController extends Controller
 
         if (!empty($booking['checkin_time'])) {
             return $this->redirectWithMessage(
-                'index.php?controller=adminBooking&action=manage',
+                $detailUrl,
                 'Booking ini sudah pernah dimulai.',
                 'error'
             );
         }
+
         $now        = date('Y-m-d H:i:s');
         $start_time = $booking['start_time'];
 
         if ($now < $start_time) {
             return $this->redirectWithMessage(
-                'index.php?controller=adminBooking&action=manage',
+                $detailUrl,
                 'Tidak dapat mulai sebelum waktu peminjaman.',
                 'error'
             );
@@ -656,10 +679,11 @@ class AdminBookingController extends Controller
         $bookingModel->setCheckinTime($idBooking);
 
         return $this->redirectWithMessage(
-            'index.php?controller=adminBooking&action=manage',
+            $detailUrl,
             'Booking telah dimulai. Kunci boleh diserahkan.'
         );
     }
+
 
     public function complete()
     {

@@ -266,8 +266,6 @@ class UserRescheduleController extends Controller
             ]);
             return;
         }
-
-        // cek bentrok dengan booking lain (kecuali dirinya sendiri)
         if ($bookingModel->isBentrokExcept($idRuangan, $newStart, $newEnd, $idBooking)) {
             $members       = $bookingModel->getMembers($idBooking);
             $disabledSlots = $bookingModel->getDisabledSlotsForRoomDateExcept(

@@ -7,7 +7,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
+
 <body class="bg-[#f2f7fc] text-gray-800 flex">
+
 
     <?php
     // SIDEBAR
@@ -18,7 +20,12 @@
     ?>
 
     <div class="flex-1 flex flex-col h-screen overflow-y-auto">
-
+        <?php
+        $flashPath = __DIR__ . '/../layout/flash.php';
+        if (file_exists($flashPath)) {
+            include $flashPath;
+        }
+        ?>
         <!-- NAVBAR -->
         <div class="m-4">
             <?php
@@ -44,17 +51,14 @@
 
         $namaRuangan = $booking['nama_ruangan'] ?? $booking['ruang'] ?? '-';
         $tanggal     = $booking['tanggal'] ?? '-';
-
         $startRaw = $booking['start_time'] ?? null;
         $endRaw   = $booking['end_time']   ?? null;
-
         $jamMulai   = $startRaw ? date('H:i', strtotime($startRaw)) : '-';
         $jamSelesai = $endRaw   ? date('H:i', strtotime($endRaw))   : '-';
-
         $jumlahAnggota = $booking['jumlah_anggota'] ?? null;
         $kapMin        = $booking['kapasitas_min'] ?? null;
         $kapMax        = $booking['kapasitas_max'] ?? null;
-        $submitted  = (int)($booking['submitted'] ?? 0);
+        $submitted     = (int)($booking['submitted'] ?? 0);
         $statusRaw = strtolower(
             $booking['last_status']
                 ?? $booking['status']
@@ -128,6 +132,25 @@
             'completed',
             'reschedule_pending', // penting supaya tidak bentrok dengan flow reschedule
         ];
+
+        // cekin: kapan boleh MULAI dan SELESAI
+        $checkinTime = $booking['checkin_time'] ?? null;
+
+        // Bisa MULAI kalau:
+        // - sudah ada id booking
+        // - status approved / reschedule_approved
+        // - belum pernah check-in
+        $canStart = $idBooking > 0
+            && in_array($statusRaw, ['approved', 'reschedule_approved'], true)
+            && empty($checkinTime);
+
+        // Bisa SELESAI kalau:
+        // - sudah ada id booking
+        // - sudah check-in
+        // - status belum final (selesai/cancelled/rejected)
+        $canComplete = $idBooking > 0
+            && !empty($checkinTime)
+            && !in_array($statusRaw, ['selesai', 'completed', 'cancelled', 'rejected'], true);
         ?>
 
         <div class="px-8 pb-10 space-y-6">
@@ -273,9 +296,10 @@
                     <?php endif; ?>
                 </div>
 
-                <!-- AKSI ADMIN (APPROVE / REJECT BOOKING UTAMA) -->
+                <!-- AKSI ADMIN (APPROVE / REJECT / MULAI / SELESAI) -->
                 <div class="pt-6 border-t flex flex-wrap gap-3">
 
+                    <!-- APPROVE / REJECT hanya kalau status belum "locked" -->
                     <?php if ($idBooking > 0 && !in_array($statusRaw, $lockedStatuses, true)): ?>
                         <form action="index.php?controller=adminBooking&action=approve"
                             method="POST">
@@ -294,6 +318,32 @@
                             <button type="submit"
                                 class="px-5 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm font-semibold">
                                 Tolak Booking
+                            </button>
+                        </form>
+                    <?php endif; ?>
+
+                    <!-- MULAI: hanya kalau APPROVED & belum pernah check-in -->
+                    <?php if ($canStart): ?>
+                        <form action="index.php?controller=adminBooking&action=start"
+                            method="POST"
+                            onsubmit="return confirm('Mulai peminjaman sekarang?');">
+                            <input type="hidden" name="id_booking" value="<?= $idBooking ?>">
+                            <button type="submit"
+                                class="px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-semibold">
+                                Mulai Peminjaman
+                            </button>
+                        </form>
+                    <?php endif; ?>
+
+                    <!-- SELESAI: hanya kalau sudah check-in & belum selesai -->
+                    <?php if ($canComplete): ?>
+                        <form action="index.php?controller=adminBooking&action=complete"
+                            method="POST"
+                            onsubmit="return confirm('Tandai booking ini sebagai selesai?');">
+                            <input type="hidden" name="id_booking" value="<?= $idBooking ?>">
+                            <button type="submit"
+                                class="px-5 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 text-sm font-semibold">
+                                Tandai Selesai
                             </button>
                         </form>
                     <?php endif; ?>

@@ -64,7 +64,8 @@
 
             // Filter tipe booking: internal / external / all
             $typeFilter = $_GET['tipe'] ?? 'all';
-            $activeTab  = in_array($typeFilter, ['internal', 'external'], true) ? $typeFilter : 'all';
+            // Untuk tampilan tab: default ke 'internal' kalau bukan 'external'
+            $activeTab  = ($typeFilter === 'external') ? 'external' : 'internal';
 
             // Waktu sekarang (timestamp) – untuk logic "Mulai Peminjaman"
             $nowTs = time();
@@ -79,13 +80,13 @@
                 $tmp = [];
                 foreach ($bookings as $b) {
                     $haystackParts = [
-                        $b['kode']        ?? $b['booking_code'] ?? '',
-                        $b['pj']          ?? '',
-                        $b['pj_nim']      ?? $b['pj_nip'] ?? '',
-                        $b['ruang']       ?? '',
-                        $b['lokasi']      ?? '',
-                        $b['guest_name']  ?? '',
-                        $b['asal_instansi'] ?? '',
+                        $b['kode']           ?? $b['booking_code'] ?? '',
+                        $b['pj']             ?? '',
+                        $b['pj_nim']         ?? $b['pj_nip'] ?? '',
+                        $b['ruang']          ?? '',
+                        $b['lokasi']         ?? '',
+                        $b['guest_name']     ?? '',
+                        $b['asal_instansi']  ?? '',
                     ];
                     $haystack = strtolower(implode(' ', $haystackParts));
                     if (strpos($haystack, strtolower($search)) !== false) {
@@ -106,11 +107,14 @@
                 $displayBookings = $tmp;
             }
 
-            // 3) Filter tipe internal / external
+            // 3) Filter tipe internal / external (PAKAI is_external)
             if (in_array($typeFilter, ['internal', 'external'], true)) {
                 $tmp = [];
                 foreach ($displayBookings as $b) {
-                    $tipe = strtolower($b['tipe'] ?? 'internal');
+                    $tipe = (!empty($b['is_external']) && (int)$b['is_external'] === 1)
+                        ? 'external'
+                        : 'internal';
+
                     if ($tipe === $typeFilter) {
                         $tmp[] = $b;
                     }
@@ -118,11 +122,11 @@
                 $displayBookings = $tmp;
             }
 
+            // Kalau pakai search / filter status, pagination dari controller diabaikan (all-in-one)
             if ($statusFilter !== 'all' || $search !== '') {
                 $totalPages  = 1;
                 $currentPage = 1;
             }
-
 
             // Base URL untuk tab dan pagination
             $baseUrl = 'index.php?controller=adminBooking&action=manage'
@@ -211,6 +215,11 @@
                                         $startField = $b['start_time']   ?? null;
                                         $checkin    = $b['checkin_time'] ?? null;
 
+                                        // TIPE: hitung dari is_external
+                                        $tipe = (!empty($b['is_external']) && (int)$b['is_external'] === 1)
+                                            ? 'external'
+                                            : 'internal';
+
                                         $startTs = null;
                                         if ($tanggal && $startField) {
                                             $startTs = strtotime($tanggal . ' ' . $startField);
@@ -294,11 +303,9 @@
                                                     <span class="font-mono text-sm font-semibold text-slate-900">
                                                         <?= htmlspecialchars($b['kode'] ?? $b['booking_code'] ?? '-') ?>
                                                     </span>
-                                                    <?php if (!empty($b['tipe'])): ?>
-                                                        <span class="inline-flex items-center rounded-full bg-slate-100 text-[10px] px-2 py-0.5 text-slate-600">
-                                                            <?= htmlspecialchars(ucfirst($b['tipe'])) ?>
-                                                        </span>
-                                                    <?php endif; ?>
+                                                    <span class="inline-flex items-center rounded-full bg-slate-100 text-[10px] px-2 py-0.5 text-slate-600">
+                                                        <?= htmlspecialchars(ucfirst($tipe)) ?>
+                                                    </span>
                                                 </div>
                                             </td>
 

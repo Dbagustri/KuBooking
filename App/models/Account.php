@@ -77,34 +77,48 @@ class Account extends Model
     {
         $limit  = 10;
         $offset = ($page - 1) * $limit;
+
+        // kalau memang mau sembunyikan admin/super_admin di list default
         $where  = "WHERE role NOT IN ('admin','super_admin')";
         $params = [];
+
         if ($filter !== '') {
             $where .= " AND role = :filter";
             $params[':filter'] = $filter;
         }
+
         if ($search !== '') {
-            $where .= " AND (nama LIKE :search OR email LIKE :search OR jurusan LIKE :search)";
+            $where .= " AND (nama LIKE :search 
+                     OR email LIKE :search 
+                     OR jurusan LIKE :search 
+                     OR unit_jurusan LIKE :search 
+                     OR nim_nip LIKE :search)";
             $params[':search'] = "%{$search}%";
         }
+
+        // hitung total data
         $sqlCount  = "SELECT COUNT(*) FROM " . self::$table . " {$where}";
         $stmtCount = self::$db->prepare($sqlCount);
         $stmtCount->execute($params);
-        $totalRows = (int)$stmtCount->fetchColumn();
+        $totalRows  = (int)$stmtCount->fetchColumn();
         $totalPages = $totalRows > 0 ? (int)ceil($totalRows / $limit) : 1;
+
+        // AMBIL DATA LIST USER
         $sql = "SELECT 
-                    id_account,
-                    nama,
-                    email,
-                    jurusan,
-                    prodi,
-                    role,
-                    status_aktif,
-                    screenshot_kubaca
-                FROM " . self::$table . "
-                {$where}
-                ORDER BY nama ASC
-                LIMIT :limit OFFSET :offset";
+                id_account,
+                nama,
+                nim_nip,          -- ✅ tambahkan ini
+                email,
+                jurusan,
+                unit_jurusan,     -- ✅ dan ini biar view nggak kosong
+                prodi,
+                role,
+                status_aktif,
+                screenshot_kubaca
+            FROM " . self::$table . "
+            {$where}
+            ORDER BY nama ASC
+            LIMIT :limit OFFSET :offset";
 
         $stmt = self::$db->prepare($sql);
         foreach ($params as $k => $v) {
@@ -113,7 +127,9 @@ class Account extends Model
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
+
         $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
         return [
             'users'        => $data,
             'current_page' => $page,
@@ -122,6 +138,7 @@ class Account extends Model
             'search'       => $search,
         ];
     }
+
     public function updateBasicProfile(int $id, array $data): bool
     {
         $fields = [];

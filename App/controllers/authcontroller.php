@@ -302,6 +302,7 @@ class AuthController extends Controller
     // Helper: Fungsi private untuk mengarahkan user sesuai role
     private function redirectBasedOnRole()
     {
+
         $user = Auth::user();
         $role = $user['role'] ?? 'mahasiswa';
 
@@ -313,7 +314,6 @@ class AuthController extends Controller
     }
     public function gantiPassword()
     {
-        // Pastikan user sudah login
         if (!Auth::check()) {
             $this->redirect('index.php?controller=auth&action=login');
             return;
@@ -338,8 +338,6 @@ class AuthController extends Controller
             ]);
             return;
         }
-
-        // Kalau POST -> proses ubah password
         $passwordLama  = $this->input('password_lama');
         $passwordBaru  = $this->input('password_baru');
         $passwordBaru2 = $this->input('password_baru2');
@@ -351,15 +349,6 @@ class AuthController extends Controller
             ]);
             return;
         }
-
-        if (strlen($passwordBaru) < 6) {
-            $this->view('auth/gantipassword', [
-                'error'   => 'Password baru minimal 6 karakter.',
-                'success' => null,
-            ]);
-            return;
-        }
-
         if ($passwordBaru !== $passwordBaru2) {
             $this->view('auth/gantipassword', [
                 'error'   => 'Konfirmasi password baru tidak sama.',
@@ -370,8 +359,13 @@ class AuthController extends Controller
 
         $accountModel    = new Account();
         $registrasiModel = new Registrasi();
-
-        // Cari dulu di tabel Account, kalau gak ada baru di tabel Registrasi
+        if (!preg_match('/^(?=.*[A-Za-z])(?=.*\d).{8,}$/', $passwordBaru)) {
+            $this->view('auth/gantipassword', [
+                'error'   => 'Password baru minimal 8 karakter dan harus mengandung huruf dan angka.',
+                'success' => null,
+            ]);
+            return;
+        }
         $record = $accountModel->findByNimNip($nim);
         $source = 'account';
 
@@ -414,13 +408,7 @@ class AuthController extends Controller
             ]);
             return;
         }
-        if (!preg_match('/^(?=.*[A-Za-z])(?=.*\d).{8,}$/', $passwordBaru)) {
-            $this->view('auth/gantipassword', [
-                'error'   => 'Password baru minimal 8 karakter dan harus mengandung huruf dan angka.',
-                'success' => null,
-            ]);
-            return;
-        }
+
         // Kalau mau, bisa pakai flash message
         $this->redirectWithMessage(
             'index.php?controller=userBooking&action=home',
