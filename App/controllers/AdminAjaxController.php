@@ -29,12 +29,13 @@ class AdminAjaxController extends Controller
         $idRuangan = (int)($this->input('id_ruangan') ?? 0);
         $tanggal   = $this->input('tanggal');
 
+        // Validasi awal
         if (
             !$idRuangan ||
             !$tanggal ||
             !preg_match('/^\d{4}-\d{2}-\d{2}$/', $tanggal)
         ) {
-            $this->jsonResponse([
+            return $this->jsonResponse([
                 'success' => false,
                 'message' => 'Data ruangan atau tanggal tidak valid.',
             ]);
@@ -45,106 +46,72 @@ class AdminAjaxController extends Controller
 
         $room = $roomModel->findById($idRuangan);
         if (!$room) {
-            $this->jsonResponse([
+            return $this->jsonResponse([
                 'success' => false,
                 'message' => 'Ruangan tidak ditemukan.',
             ]);
         }
 
-        // Ambil jadwal ruangan untuk hari tersebut
-        $scheduleRows = $roomModel->getScheduleByRoom($idRuangan);
-        if (empty($scheduleRows)) {
-            $this->jsonResponse([
-                'success' => true,
-                'slots'   => [],
-                'message' => 'Ruangan tidak memiliki jadwal operasional.',
-            ]);
-        }
+        // ===========================
+        // JAM OPERASIONAL GLOBAL
+        // (bukan dari jadwal ruangan)
+        // ===========================
+        // Silakan ubah kalau jam bukanya beda
+        $OPEN_TIME  = '08:00:00';
+        $CLOSE_TIME = '16:00:00';
 
-        $dayOfWeek = date('N', strtotime($tanggal)); // 1 (Senin) - 7 (Minggu)
-        $mapHari   = [
-            1 => 'Senin',
-            2 => 'Selasa',
-            3 => 'Rabu',
-            4 => 'Kamis',
-            5 => 'Jumat',
-            6 => 'Sabtu',
-            7 => 'Minggu',
-        ];
-        $hari = $mapHari[$dayOfWeek] ?? null;
-
-        $schedule = null;
-        foreach ($scheduleRows as $row) {
-            if (isset($row['hari']) && $row['hari'] === $hari) {
-                $schedule = $row;
-                break;
-            }
-        }
-
-        if (!$schedule || empty($schedule['open_time']) || empty($schedule['close_time'])) {
-            $this->jsonResponse([
-                'success' => true,
-                'slots'   => [],
-                'message' => 'Ruangan tidak beroperasi pada hari yang dipilih.',
-            ]);
-        }
-
-        $openTime   = $schedule['open_time'];   // '08:00:00'
-        $closeTime  = $schedule['close_time'];  // '16:00:00'
-        $breakStart = $schedule['break_start'] ?? null;
-        $breakEnd   = $schedule['break_end'] ?? null;
-
-        $openTs  = strtotime($tanggal . ' ' . $openTime);
-        $closeTs = strtotime($tanggal . ' ' . $closeTime);
+        $openTs  = strtotime($tanggal . ' ' . $OPEN_TIME);
+        $closeTs = strtotime($tanggal . ' ' . $CLOSE_TIME);
 
         if ($closeTs <= $openTs) {
-            $this->jsonResponse([
+            return $this->jsonResponse([
                 'success' => true,
                 'slots'   => [],
-                'message' => 'Jam operasional ruangan tidak valid.',
+                'message' => 'Jam operasional perpustakaan tidak valid.',
             ]);
         }
 
-        // Bangun segmen kerja (memisahkan jam istirahat jika ada)
-        $segments = [];
-        if ($breakStart && $breakEnd) {
-            $bs = strtotime($tanggal . ' ' . $breakStart);
-            $be = strtotime($tanggal . ' ' . $breakEnd);
-
-            if ($bs > $openTs) {
-                $segments[] = [$openTs, $bs];
-            }
-            if ($be < $closeTs) {
-                $segments[] = [$be, $closeTs];
-            }
-        } else {
-            $segments[] = [$openTs, $closeTs];
-        }
-
-        if (empty($segments)) {
-            $this->jsonResponse([
-                'success' => true,
-                'slots'   => [],
-                'message' => 'Tidak ada jam operasional yang tersedia pada hari tersebut.',
-            ]);
-        }
-
-        // Semua slot 30 menit yang diperbolehkan (jam kerja)
+        // Semua slot 30 menit di antara jam buka–tutup
         $workingTimes = [];
-        foreach ($segments as [$segStart, $segEnd]) {
-            for ($t = $segStart; $t < $segEnd; $t += 30 * 60) {
-                $workingTimes[] = date('H:i', $t);
-            }
+        for ($t = $openTs; $t < $closeTs; $t += 30 * 60) {
+            $workingTimes[] = date('H:i', $t);
         }
         $workingTimes = array_values(array_unique($workingTimes));
+
+        // ====== FILTER: buang jam yang sudah lewat untuk TANGGAL HARI INI ======
+        $today = date('Y-m-d');
+        if ($tanggal === $today) {
+            $nowTs = time();
+            $workingTimes = array_filter($workingTimes, function ($time) use ($tanggal, $nowTs) {
+                $slotTs = strtotime($tanggal . ' ' . $time . ':00');
+                return $slotTs > $nowTs;
+            });
+            $workingTimes = array_values($workingTimes);
+        }
+
+        if (empty($workingTimes)) {
+            return $this->jsonResponse([
+                'success' => true,
+                'slots'   => [],
+                'message' => 'Tidak ada slot yang tersedia pada hari tersebut.',
+            ]);
+        }
 
         // Ambil slot yang sudah terpakai berdasarkan booking aktif
         $disabled = $bookingModel->getDisabledSlotsForRoomDate($idRuangan, $tanggal);
         $disabled = array_unique($disabled);
 
-        // Free = jam operasional - jam yang sudah dibooking
+        // Free = jam kerja - jam yang sudah dibooking
         $freeTimes = array_values(array_diff($workingTimes, $disabled));
         sort($freeTimes);
+
+        if (empty($freeTimes)) {
+            return $this->jsonResponse([
+                'success' => true,
+                'slots'   => [],
+                'message' => 'Tidak ada slot yang tersedia pada hari dan ruangan yang dipilih.',
+            ]);
+        }
 
         // Set untuk cek cepat
         $freeSet = array_flip($freeTimes);
@@ -152,7 +119,7 @@ class AdminAjaxController extends Controller
         $slots = []; // 'H:i' => maxDur (1–3 jam)
 
         foreach ($freeTimes as $startTime) {
-            $startTs = strtotime($tanggal . ' ' . $startTime);
+            $startTs = strtotime($tanggal . ' ' . $startTime . ':00');
             $maxDur  = 0;
 
             // Coba durasi 1–3 jam
@@ -183,7 +150,7 @@ class AdminAjaxController extends Controller
 
         ksort($slots);
 
-        $this->jsonResponse([
+        return $this->jsonResponse([
             'success' => true,
             'slots'   => $slots,
             'message' => empty($slots)
@@ -192,16 +159,6 @@ class AdminAjaxController extends Controller
         ]);
     }
 
-    /**
-     * Cek user berdasarkan NIM:
-     * - Harus ada di tabel Account
-     * - status_aktif = 'aktif'
-     * - Tidak memiliki booking aktif (getActiveBookingForUser)
-     * - Tidak memiliki booking 'selesai' yang belum ia rating
-     *
-     * Input: nim
-     * Output: { success: true, user: {id_account, nama, nim_nip, role, status_aktif} } atau error.
-     */
     public function checkUserByNim()
     {
         Auth::requireRole(['admin', 'super_admin']);

@@ -27,7 +27,12 @@ $search       = $search       ?? '';
 
     <!-- CONTENT -->
     <div class="flex-1 flex flex-col h-screen overflow-y-auto">
-
+        <?php
+        $flashPath = __DIR__ . '/../layout/flash.php';
+        if (file_exists($flashPath)) {
+            include $flashPath;
+        }
+        ?>
         <!-- NAVBAR -->
         <div class="m-4">
             <?php
@@ -82,10 +87,6 @@ $search       = $search       ?? '';
 
             </div>
 
-            <!-- INFO RANGE DATA (opsional, kalau mau ditambahin nanti) -->
-            <!-- <p class="text-xs text-gray-500">Menampilkan user dengan status pending / rejected saja.</p> -->
-
-            <!-- TABLE -->
             <div class="overflow-x-auto">
                 <table class="min-w-full border-collapse bg-white shadow rounded-lg overflow-hidden">
                     <thead>

@@ -76,7 +76,12 @@ $isFinal = in_array($status, ['approved', 'rejected'], true);
     ?>
 
     <div class="flex-1 flex flex-col h-screen overflow-y-auto">
-
+        <?php
+        $flashPath = __DIR__ . '/../layout/flash.php';
+        if (file_exists($flashPath)) {
+            include $flashPath;
+        }
+        ?>
         <div class="m-4">
             <?php
             $navPath = __DIR__ . '/../layout/nav-admin.php';

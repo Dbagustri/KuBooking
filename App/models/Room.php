@@ -157,11 +157,28 @@ class Room extends Model
     public function getBookedSlotsToday($idRuangan)
     {
         $sql = "
-            SELECT start_time, end_time
-            FROM bookings
-            WHERE id_ruangan = :id
-              AND tanggal = CURDATE()
-        ";
+                SELECT b.start_time, b.end_time
+                FROM bookings b
+                LEFT JOIN booking_status bs_latest
+                    ON bs_latest.id_status = (
+                        SELECT MAX(bs2.id_status)
+                        FROM booking_status bs2
+                        WHERE bs2.id_bookings = b.id_bookings
+                    )
+                WHERE 
+                    b.id_ruangan = :id
+                    AND b.tanggal = CURDATE()
+                    AND (
+                        b.submitted = 1
+                        OR b.group_expire_at IS NULL
+                        OR b.group_expire_at >= NOW()
+                    )
+                    AND (
+                        bs_latest.status IS NULL
+                        OR bs_latest.status NOT IN ('cancelled','rejected')
+                    )
+            ";
+
 
         $stmt = self::$db->prepare($sql);
         $stmt->execute(['id' => $idRuangan]);

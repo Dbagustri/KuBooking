@@ -69,29 +69,37 @@ class AccountSuspend extends Model
 
             // Kalau belum suspended dan sudah mencapai 3 kali → suspend akun
             if (!$isSuspended && $suspendCount >= 3) {
+
+                $tanggalSuspend  = date('Y-m-d H:i:s');
+                $tanggalBerakhir = date('Y-m-d H:i:s', strtotime('+7 days'));
+
                 // update Account_suspend
                 $upd2 = self::$db->prepare("
-                    UPDATE " . self::$table . "
-                    SET suspended = 'yes',
-                        tanggal_suspend = NOW(),
-                        alasan = :alasan
-                    WHERE id_user = :id_user
-                ");
+        UPDATE " . self::$table . "
+        SET suspended = 'yes',
+            tanggal_suspend = :tanggal_suspend,
+            tanggal_berakhir = :tanggal_berakhir,
+            alasan = :alasan
+        WHERE id_user = :id_user
+    ");
                 $upd2->execute([
-                    'alasan'  => 'Suspend otomatis: 3x membatalkan booking.',
-                    'id_user' => $idUser,
+                    'tanggal_suspend'  => $tanggalSuspend,
+                    'tanggal_berakhir' => $tanggalBerakhir,
+                    'alasan'           => 'Suspend otomatis: 3x membatalkan booking.',
+                    'id_user'          => $idUser,
                 ]);
 
                 // update Account.status_aktif
                 $updAcc = self::$db->prepare("
-                    UPDATE Account
-                    SET status_aktif = 'nonaktif'
-                    WHERE id_account = :id
-                ");
+        UPDATE Account
+        SET status_aktif = 'nonaktif'
+        WHERE id_account = :id
+    ");
                 $updAcc->execute(['id' => $idUser]);
 
                 $isSuspended = true;
             }
+
 
             self::$db->commit();
 

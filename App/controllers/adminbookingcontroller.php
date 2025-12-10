@@ -85,6 +85,7 @@ class AdminBookingController extends Controller
             ]);
             return;
         }
+
         $idRuangan  = $this->input('id_ruangan');
         $tanggal    = $this->input('tanggal');
         $jamMulai   = $this->input('jam_mulai');
@@ -92,6 +93,8 @@ class AdminBookingController extends Controller
         $keperluan  = $this->input('keperluan');
         $members    = $_POST['members'] ?? [];
         $pjIdInput  = $this->input('pj_id_user');
+
+        // ====== VALIDASI DASAR ======
         if (
             !$idRuangan ||
             !$tanggal ||
@@ -105,6 +108,17 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
+
+        // Durasi maksimal 3 jam seperti user biasa
+        if ($durasi < 1 || $durasi > 3) {
+            return $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=createInternal',
+                'Durasi peminjaman harus antara 1 hingga 3 jam.',
+                'error'
+            );
+        }
+
+        // Minimal 1 anggota
         if (empty($members) || !is_array($members)) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=createInternal',
@@ -112,6 +126,7 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
+
         $room = $roomModel->findById((int)$idRuangan);
         if (!$room) {
             return $this->redirectWithMessage(
@@ -121,14 +136,52 @@ class AdminBookingController extends Controller
             );
         }
 
+        // ====== VALIDASI WAKTU (TIDAK BOLEH DI MASA LALU) ======
+        $today = date('Y-m-d');
+        $now   = date('Y-m-d H:i:s');
+
+        // Tanggal sebelum hari ini tidak boleh
+        if ($tanggal < $today) {
+            return $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=createInternal',
+                'Tanggal peminjaman tidak boleh di masa lalu.',
+                'error'
+            );
+        }
+
+        $start = $tanggal . ' ' . $jamMulai . ':00';
+        $end   = date('Y-m-d H:i:s', strtotime($start . " + {$durasi} hour"));
+
+        // Kalau tanggal hari ini, jam mulai tidak boleh <= sekarang
+        if ($tanggal === $today && $start <= $now) {
+            return $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=createInternal',
+                'Jam mulai sudah lewat dari waktu sekarang.',
+                'error'
+            );
+        }
+
+        // ====== CEK BENTROK DENGAN BOOKING LAIN ======
+        // Pakai BookingUser->isBentrok karena booking internal tetap masuk tabel yang sama
+        if ($bookingUser->isBentrok((int)$idRuangan, $start, $end)) {
+            return $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=createInternal',
+                'Jadwal bentrok dengan peminjaman lain. Silakan pilih jam lain.',
+                'error'
+            );
+        }
+
+        // ====== VALIDASI ANGGOTA ======
         $kapasitasMin = (int)($room['kapasitas_min'] ?? 0);
         $kapasitasMax = (int)($room['kapasitas_max'] ?? 0);
+
         $validMembers = [];
         foreach ($members as $mid) {
             if (!ctype_digit((string)$mid)) {
                 continue;
             }
             $mid = (int)$mid;
+
             $user = $accountModel->findById($mid);
             if (!$user) {
                 return $this->redirectWithMessage(
@@ -137,6 +190,8 @@ class AdminBookingController extends Controller
                     'error'
                 );
             }
+
+            // Tidak boleh punya booking aktif
             $active = $bookingUser->getActiveBookingForUser($mid);
             if ($active) {
                 return $this->redirectWithMessage(
@@ -158,6 +213,7 @@ class AdminBookingController extends Controller
         }
 
         $jumlahAnggota = count($validMembers);
+
         if ($kapasitasMin > 0 && $jumlahAnggota < $kapasitasMin) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=createInternal',
@@ -174,11 +230,13 @@ class AdminBookingController extends Controller
             );
         }
 
+        // ====== TENTUKAN PJ (ANGGOTA PERTAMA DEFAULT) ======
         $pjIdUser = (int)($pjIdInput ?? 0);
         if (!$pjIdUser || !in_array($pjIdUser, $validMembers, true)) {
             $pjIdUser = $validMembers[0];
         }
 
+        // Data untuk BookingAdmin
         $data = [
             'id_ruangan'   => (int)$idRuangan,
             'tanggal'      => $tanggal,
@@ -204,6 +262,7 @@ class AdminBookingController extends Controller
             'Booking internal berhasil dibuat.'
         );
     }
+
 
 
 

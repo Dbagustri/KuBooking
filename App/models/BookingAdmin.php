@@ -530,17 +530,22 @@ class BookingAdmin extends BookingBase
     {
         $resModel = new \App\Models\BookingReschedule();
         $res      = $resModel->findWithBooking($idReschedule);
+
         if (!$res) {
             return ['success' => false, 'message' => 'Data reschedule tidak ditemukan.'];
         }
-        $idBooking = (int)$res['id_bookings'];
+
+        $idBooking  = (int)$res['id_bookings'];
         $lastStatus = $this->getLastStatus($idBooking);
+
         if ($lastStatus !== 'reschedule_pending') {
             return [
                 'success' => false,
                 'message' => 'Reschedule ini sudah diproses atau tidak dalam status pending.'
             ];
         }
+
+        // 1. Tambahkan status rejected reschedule
         $this->addStatus(
             $idBooking,
             'reschedule_rejected',
@@ -549,8 +554,18 @@ class BookingAdmin extends BookingBase
             $alasan
         );
 
+        // 2. Hidupkan kembali booking lama sebagai approved
+        $this->addStatus(
+            $idBooking,
+            'approved',
+            null,
+            null,
+            null
+        );
+
         return ['success' => true];
     }
+
 
     public function cancelBookingsByDate(string $tanggal): int
     {

@@ -14,6 +14,12 @@
         include $sidebarPath;
     }
     ?>
+    <?php
+    $flashPath = __DIR__ . '/../layout/flash.php';
+    if (file_exists($flashPath)) {
+        include $flashPath;
+    }
+    ?>
     <div class="flex-1 flex flex-col h-screen overflow-y-auto">
         <div class="m-4">
             <?php
