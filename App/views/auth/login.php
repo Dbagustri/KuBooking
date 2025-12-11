@@ -77,16 +77,35 @@ header("Pragma: no-cache");
                     </div>
                 </div>
 
-                <!-- CAPTCHA nanti bisa disambung ke backend, sementara dummy -->
-                <div class="flex items-center space-x-4">
-                    <span class="bg-[#1e3a5f] text-white text-lg font-bold px-6 py-3 rounded-lg select-none">
-                        Mv659
-                    </span>
-                    <input
-                        type="text"
-                        placeholder="Kode CAPTCHA"
-                        class="w-full px-5 py-4 text-lg border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <!-- CAPTCHA -->
+                <div class="space-y-2">
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                        <!-- Gambar + tombol refresh -->
+                        <div class="flex items-center gap-2 sm:w-auto shrink-0">
+                            <img
+                                src="captcha.php?rand=<?= time() ?>"
+                                alt="CAPTCHA"
+                                class="h-12 rounded-lg border border-gray-300 bg-white"
+                                id="captchaImage">
+                            <button
+                                type="button"
+                                class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100"
+                                onclick="refreshCaptcha()">
+                                <i class="fa-solid fa-arrows-rotate"></i>
+                            </button>
+                        </div>
+
+                        <!-- Input kode captcha -->
+                        <input
+                            type="text"
+                            name="captcha"
+                            placeholder="Kode CAPTCHA"
+                            class="w-full sm:flex-1 px-5 py-4 text-lg border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            autocomplete="off"
+                            required>
+                    </div>
                 </div>
+
 
                 <button
                     type="submit"
@@ -104,7 +123,7 @@ header("Pragma: no-cache");
         </div>
 
         <div class="hidden md:block">
-            <img src="rapat.png" alt="Ilustrasi Ruangan Rapat" class="w-full h-full object-cover">
+            <img src="img/rapat.png" alt="Ilustrasi Ruangan Rapat" class="w-full h-full object-cover">
         </div>
 
     </div>
@@ -113,6 +132,11 @@ header("Pragma: no-cache");
         // Toggle show / hide password
         const toggleButtons = document.querySelectorAll('[data-toggle-password]');
 
+        function refreshCaptcha() {
+            const img = document.getElementById('captchaImage');
+            if (!img) return;
+            img.src = 'captcha.php?rand=' + Date.now();
+        }
         toggleButtons.forEach(btn => {
             btn.addEventListener('click', () => {
                 const targetId = btn.getAttribute('data-toggle-password');

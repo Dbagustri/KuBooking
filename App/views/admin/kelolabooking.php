@@ -389,15 +389,6 @@
                                             <!-- STATUS -->
                                             <td class="px-4 py-3">
                                                 <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold <?= $badgeClass ?>">
-                                                    <?php if (in_array($statusRaw, ['approved', 'reschedule_approved', 'ongoing', 'selesai', 'completed'], true)): ?>
-                                                        ✅
-                                                    <?php elseif (in_array($statusRaw, ['rejected', 'cancelled', 'reschedule_rejected'], true)): ?>
-                                                        ✖
-                                                    <?php elseif ($statusRaw === 'reschedule_pending'): ?>
-                                                        🔁
-                                                    <?php else: ?>
-                                                        ⏳
-                                                    <?php endif; ?>
                                                     <span><?= htmlspecialchars($statusLabel) ?></span>
                                                 </span>
                                             </td>

@@ -13,22 +13,44 @@ use App\Models\BookingUser;
 
 class AdminBookingController extends Controller
 {
+    /** @var BookingAdmin */
+    private $bookingAdminModel;
+    /** @var BookingReschedule */
+    private $bookingRescheduleModel;
+    /** @var Room */
+    private $roomModel;
+    /** @var AccountSuspend */
+    private $accountSuspendModel;
+    /** @var Account */
+    private $accountModel;
+    /** @var BookingUser */
+    private $bookingUserModel;
+
+    public function __construct()
+    {
+        $this->bookingAdminModel      = new BookingAdmin();
+        $this->bookingRescheduleModel = new BookingReschedule();
+        $this->roomModel              = new Room();
+        $this->accountSuspendModel    = new AccountSuspend();
+        $this->accountModel           = new Account();
+        $this->bookingUserModel       = new BookingUser();
+    }
 
     public function manage()
     {
         Auth::requireRole(['admin', 'super_admin']);
 
-        $bookingModel = new BookingAdmin();
-        $bookingModel->autoCancelLateBookings();
+        $this->bookingAdminModel->autoCancelLateBookings();
 
         $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
         if ($page < 1) $page = 1;
 
         $limit  = 5;
         $offset = ($page - 1) * $limit;
-        $totalRows   = $bookingModel->countAllForAdmin();
-        $totalPages  = $totalRows > 0 ? (int)ceil($totalRows / $limit) : 1;
-        $bookings = $bookingModel->getAllForAdmin($limit, $offset);
+
+        $totalRows  = $this->bookingAdminModel->countAllForAdmin();
+        $totalPages = $totalRows > 0 ? (int)ceil($totalRows / $limit) : 1;
+        $bookings   = $this->bookingAdminModel->getAllForAdmin($limit, $offset);
 
         $this->view('admin/kelolabooking', [
             'bookings'    => $bookings,
@@ -50,8 +72,7 @@ class AdminBookingController extends Controller
             );
         }
 
-        $bookingModel = new BookingAdmin();
-        $booking      = $bookingModel->findAdminDetail((int)$id);
+        $booking = $this->bookingAdminModel->findAdminDetail((int)$id);
 
         if (!$booking) {
             return $this->redirectWithMessage(
@@ -61,7 +82,7 @@ class AdminBookingController extends Controller
             );
         }
 
-        $members = $bookingModel->getMembers((int)$id);
+        $members = $this->bookingAdminModel->getMembers((int)$id);
 
         $this->view('admin/booking-detail', [
             'booking' => $booking,
@@ -73,11 +94,7 @@ class AdminBookingController extends Controller
     {
         Auth::requireRole(['admin', 'super_admin']);
 
-        $roomModel      = new Room();
-        $rooms          = $roomModel->getAllActive();
-        $bookingModel   = new BookingAdmin();
-        $accountModel   = new Account();
-        $bookingUser    = new BookingUser();
+        $rooms = $this->roomModel->getAllActive();
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->view('admin/booking-form-internal', [
@@ -127,7 +144,7 @@ class AdminBookingController extends Controller
             );
         }
 
-        $room = $roomModel->findById((int)$idRuangan);
+        $room = $this->roomModel->findById((int)$idRuangan);
         if (!$room) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=createInternal',
@@ -140,7 +157,6 @@ class AdminBookingController extends Controller
         $today = date('Y-m-d');
         $now   = date('Y-m-d H:i:s');
 
-        // Tanggal sebelum hari ini tidak boleh
         if ($tanggal < $today) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=createInternal',
@@ -152,7 +168,6 @@ class AdminBookingController extends Controller
         $start = $tanggal . ' ' . $jamMulai . ':00';
         $end   = date('Y-m-d H:i:s', strtotime($start . " + {$durasi} hour"));
 
-        // Kalau tanggal hari ini, jam mulai tidak boleh <= sekarang
         if ($tanggal === $today && $start <= $now) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=createInternal',
@@ -162,8 +177,7 @@ class AdminBookingController extends Controller
         }
 
         // ====== CEK BENTROK DENGAN BOOKING LAIN ======
-        // Pakai BookingUser->isBentrok karena booking internal tetap masuk tabel yang sama
-        if ($bookingUser->isBentrok((int)$idRuangan, $start, $end)) {
+        if ($this->bookingUserModel->isBentrok((int)$idRuangan, $start, $end)) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=createInternal',
                 'Jadwal bentrok dengan peminjaman lain. Silakan pilih jam lain.',
@@ -182,7 +196,7 @@ class AdminBookingController extends Controller
             }
             $mid = (int)$mid;
 
-            $user = $accountModel->findById($mid);
+            $user = $this->accountModel->findById($mid);
             if (!$user) {
                 return $this->redirectWithMessage(
                     'index.php?controller=adminBooking&action=createInternal',
@@ -192,7 +206,7 @@ class AdminBookingController extends Controller
             }
 
             // Tidak boleh punya booking aktif
-            $active = $bookingUser->getActiveBookingForUser($mid);
+            $active = $this->bookingUserModel->getActiveBookingForUser($mid);
             if ($active) {
                 return $this->redirectWithMessage(
                     'index.php?controller=adminBooking&action=createInternal',
@@ -236,18 +250,17 @@ class AdminBookingController extends Controller
             $pjIdUser = $validMembers[0];
         }
 
-        // Data untuk BookingAdmin
         $data = [
-            'id_ruangan'   => (int)$idRuangan,
-            'tanggal'      => $tanggal,
-            'jam_mulai'    => $jamMulai,
-            'durasi'       => $durasi,
-            'keperluan'    => $keperluan,
-            'members'      => $validMembers,
-            'pj_id_user'   => $pjIdUser,
+            'id_ruangan' => (int)$idRuangan,
+            'tanggal'    => $tanggal,
+            'jam_mulai'  => $jamMulai,
+            'durasi'     => $durasi,
+            'keperluan'  => $keperluan,
+            'members'    => $validMembers,
+            'pj_id_user' => $pjIdUser,
         ];
 
-        $idBooking = $bookingModel->createInternalBooking($data);
+        $idBooking = $this->bookingAdminModel->createInternalBooking($data);
 
         if (!$idBooking) {
             return $this->redirectWithMessage(
@@ -263,28 +276,23 @@ class AdminBookingController extends Controller
         );
     }
 
-
-
-
     public function createExternal()
     {
         Auth::requireRole(['admin', 'super_admin']);
 
-        $roomModel    = new Room();
-        $rooms        = $roomModel->getAllActive();
-        $bookingModel = new BookingAdmin();
+        $rooms = $this->roomModel->getAllActive();
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $idRuangan     = $this->input('id_ruangan');
             $tanggal       = $this->input('tanggal');
             $jamMulai      = $this->input('jam_mulai');
-            $durasi        = (int) $this->input('durasi');
-            $jumlahAnggota = (int) $this->input('jumlah_anggota');
+            $durasi        = (int)$this->input('durasi');
+            $jumlahAnggota = (int)$this->input('jumlah_anggota');
             $keperluan     = $this->input('keperluan');
-            $guestName  = $this->input('guest_name')  ?: $this->input('nama_peminjam');
-            $guestEmail = $this->input('guest_email') ?: $this->input('email_peminjam');
-            $guestPhone = $this->input('guest_phone') ?: $this->input('no_hp');
-            $asalInstansi = $this->input('asal_instansi');
+            $guestName     = $this->input('guest_name')  ?: $this->input('nama_peminjam');
+            $guestEmail    = $this->input('guest_email') ?: $this->input('email_peminjam');
+            $guestPhone    = $this->input('guest_phone') ?: $this->input('no_hp');
+            $asalInstansi  = $this->input('asal_instansi');
 
             if (
                 !$idRuangan ||
@@ -308,7 +316,7 @@ class AdminBookingController extends Controller
                 );
             }
 
-            $ruangan = $roomModel->findById((int)$idRuangan);
+            $ruangan = $this->roomModel->findById((int)$idRuangan);
             if (!$ruangan || ($ruangan['status_operasional'] ?? '') !== 'aktif') {
                 return $this->redirectWithMessage(
                     'index.php?controller=adminBooking&action=createExternal',
@@ -339,6 +347,7 @@ class AdminBookingController extends Controller
                     'error'
                 );
             }
+
             $startDateTime = \DateTime::createFromFormat('Y-m-d H:i', $tanggal . ' ' . substr($jamMulai, 0, 5));
             if (!$startDateTime) {
                 return $this->redirectWithMessage(
@@ -347,8 +356,10 @@ class AdminBookingController extends Controller
                     'error'
                 );
             }
+
             $endDateTime = clone $startDateTime;
             $endDateTime->modify('+' . $durasi . ' hour');
+
             $now = new \DateTime();
             if ($tanggal === $today && $startDateTime <= $now) {
                 return $this->redirectWithMessage(
@@ -357,6 +368,7 @@ class AdminBookingController extends Controller
                     'error'
                 );
             }
+
             $kapMin = (int)($ruangan['kapasitas_min'] ?? 0);
             $kapMax = (int)($ruangan['kapasitas_max'] ?? 0);
 
@@ -379,6 +391,8 @@ class AdminBookingController extends Controller
                     'error'
                 );
             }
+
+            // upload surat izin
             $suratIzinPath = null;
             if (!empty($_FILES['surat_izin']) && $_FILES['surat_izin']['error'] !== UPLOAD_ERR_NO_FILE) {
                 if ($_FILES['surat_izin']['error'] !== UPLOAD_ERR_OK) {
@@ -427,21 +441,22 @@ class AdminBookingController extends Controller
 
                 $suratIzinPath = 'uploads/surat_izin/' . $filename;
             }
+
             $data = [
-                'id_ruangan'      => (int) $idRuangan,
-                'tanggal'         => $tanggal,
-                'jam_mulai'       => substr($jamMulai, 0, 5),
-                'durasi'          => $durasi,
-                'jumlah_anggota'  => $jumlahAnggota,
-                'keperluan'       => $keperluan,
-                'guest_name'      => $guestName,
-                'guest_email'     => $guestEmail,
-                'guest_phone'     => $guestPhone,
-                'asal_instansi'   => $asalInstansi,
-                'surat_izin'      => $suratIzinPath,
+                'id_ruangan'     => (int)$idRuangan,
+                'tanggal'        => $tanggal,
+                'jam_mulai'      => substr($jamMulai, 0, 5),
+                'durasi'         => $durasi,
+                'jumlah_anggota' => $jumlahAnggota,
+                'keperluan'      => $keperluan,
+                'guest_name'     => $guestName,
+                'guest_email'    => $guestEmail,
+                'guest_phone'    => $guestPhone,
+                'asal_instansi'  => $asalInstansi,
+                'surat_izin'     => $suratIzinPath,
             ];
 
-            $idBooking = $bookingModel->createExternalBooking($data);
+            $idBooking = $this->bookingAdminModel->createExternalBooking($data);
 
             if (!$idBooking) {
                 return $this->redirectWithMessage(
@@ -462,8 +477,6 @@ class AdminBookingController extends Controller
         ]);
     }
 
-
-
     public function edit()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -476,10 +489,8 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-        $bookingModel = new BookingAdmin();
-        $roomModel    = new Room();
 
-        $booking = $bookingModel->findWithRoom((int)$id);
+        $booking = $this->bookingAdminModel->findWithRoom((int)$id);
         if (!$booking) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=manage',
@@ -487,8 +498,10 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-        $members = $bookingModel->getMembers((int)$id);
-        $rooms   = $roomModel->getAllActive();
+
+        $members = $this->bookingAdminModel->getMembers((int)$id);
+        $rooms   = $this->roomModel->getAllActive();
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->view('admin/booking-edit', [
                 'booking' => $booking,
@@ -497,6 +510,7 @@ class AdminBookingController extends Controller
             ]);
             return;
         }
+
         $idRuangan = $this->input('id_ruangan');
         $tanggal   = $this->input('tanggal');
         $jamMulai  = $this->input('jam_mulai');
@@ -518,15 +532,16 @@ class AdminBookingController extends Controller
             ? (int)$idRuangan
             : (int)$booking['id_ruangan'];
 
-        $tanggal = $tanggal ?: date('Y-m-d', strtotime($booking['tanggal']));
+        $tanggal  = $tanggal ?: date('Y-m-d', strtotime($booking['tanggal']));
         $jamMulai = $jamMulai ?: date('H:i', strtotime($booking['start_time']));
-        $durasi = $durasi > 0 ? $durasi : 1;
+        $durasi   = $durasi > 0 ? $durasi : 1;
         if ($durasi > 3) {
             $durasi = 3;
         }
 
         $keperluan = $keperluan !== null ? $keperluan : ($booking['keperluan'] ?? '');
-        $room = $roomModel->findById($idRuangan);
+
+        $room = $this->roomModel->findById($idRuangan);
         if (!$room) {
             return $this->redirectWithMessage(
                 "index.php?controller=adminBooking&action=edit&id={$id}",
@@ -534,9 +549,10 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-        $kapMin = (int)($room['kapasitas_min'] ?? 0);
-        $kapMax = (int)($room['kapasitas_max'] ?? 0);
-        $jumlahAnggota = count($memberIds);
+
+        $kapMin         = (int)($room['kapasitas_min'] ?? 0);
+        $kapMax         = (int)($room['kapasitas_max'] ?? 0);
+        $jumlahAnggota  = count($memberIds);
 
         if ($kapMin > 0 && $jumlahAnggota < $kapMin) {
             return $this->redirectWithMessage(
@@ -552,6 +568,7 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
+
         $dataUpdate = [
             'id_booking' => (int)$id,
             'id_ruangan' => $idRuangan,
@@ -561,7 +578,7 @@ class AdminBookingController extends Controller
             'keperluan'  => $keperluan,
         ];
 
-        $ok = $bookingModel->updateAdminBooking($dataUpdate, $memberIds);
+        $ok = $this->bookingAdminModel->updateAdminBooking($dataUpdate, $memberIds);
 
         if (!$ok) {
             return $this->redirectWithMessage(
@@ -577,8 +594,6 @@ class AdminBookingController extends Controller
         );
     }
 
-
-
     public function delete()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -593,8 +608,7 @@ class AdminBookingController extends Controller
             );
         }
 
-        $bookingModel = new BookingAdmin();
-        $bookingModel->deleteBooking((int)$idBooking);
+        $this->bookingAdminModel->deleteBooking((int)$idBooking);
 
         return $this->redirectWithMessage(
             'index.php?controller=adminBooking&action=manage',
@@ -616,9 +630,8 @@ class AdminBookingController extends Controller
             );
         }
 
-        $bookingModel = new BookingAdmin();
-        $idBooking    = (int)$idBooking;
-        $lastStatus = $bookingModel->getLastStatus($idBooking);
+        $idBooking  = (int)$idBooking;
+        $lastStatus = $this->bookingAdminModel->getLastStatus($idBooking);
 
         if (in_array($lastStatus, ['approved', 'reschedule_approved', 'cancelled', 'rejected', 'selesai', 'completed'], true)) {
             return $this->redirectWithMessage(
@@ -634,14 +647,14 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-        $bookingModel->addStatus($idBooking, 'approved');
+
+        $this->bookingAdminModel->addStatus($idBooking, 'approved');
 
         return $this->redirectWithMessage(
             'index.php?controller=adminBooking&action=manage',
             'Booking berhasil disetujui.'
         );
     }
-
 
     public function reject()
     {
@@ -658,10 +671,8 @@ class AdminBookingController extends Controller
             );
         }
 
-        $bookingModel = new BookingAdmin();
-        $idBooking    = (int)$idBooking;
-
-        $lastStatus = $bookingModel->getLastStatus($idBooking);
+        $idBooking  = (int)$idBooking;
+        $lastStatus = $this->bookingAdminModel->getLastStatus($idBooking);
 
         if (in_array($lastStatus, ['rejected', 'cancelled', 'selesai', 'completed'], true)) {
             return $this->redirectWithMessage(
@@ -670,7 +681,8 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-        $bookingModel->addStatus($idBooking, 'rejected', $alasan ?: null);
+
+        $this->bookingAdminModel->addStatus($idBooking, 'rejected', $alasan ?: null);
 
         return $this->redirectWithMessage(
             'index.php?controller=adminBooking&action=manage',
@@ -678,7 +690,6 @@ class AdminBookingController extends Controller
             'success'
         );
     }
-
 
     public function start()
     {
@@ -696,8 +707,8 @@ class AdminBookingController extends Controller
 
         $idBooking = (int)$idBookingRaw;
         $detailUrl = 'index.php?controller=adminBooking&action=detail&id=' . $idBooking;
-        $bookingModel = new BookingAdmin();
-        $lastStatus   = $bookingModel->getLastStatus($idBooking);
+
+        $lastStatus = $this->bookingAdminModel->getLastStatus($idBooking);
 
         if (!in_array($lastStatus, ['approved', 'reschedule_approved'], true)) {
             return $this->redirectWithMessage(
@@ -707,7 +718,7 @@ class AdminBookingController extends Controller
             );
         }
 
-        $booking = $bookingModel->findWithRoom($idBooking);
+        $booking = $this->bookingAdminModel->findWithRoom($idBooking);
         if (!$booking) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=manage',
@@ -735,14 +746,13 @@ class AdminBookingController extends Controller
             );
         }
 
-        $bookingModel->setCheckinTime($idBooking);
+        $this->bookingAdminModel->setCheckinTime($idBooking);
 
         return $this->redirectWithMessage(
             $detailUrl,
             'Booking telah dimulai. Kunci boleh diserahkan.'
         );
     }
-
 
     public function complete()
     {
@@ -758,9 +768,9 @@ class AdminBookingController extends Controller
             );
         }
 
-        $bookingModel = new BookingAdmin();
-        $idBooking    = (int)$idBooking;
-        $booking = $bookingModel->findWithRoom($idBooking);
+        $idBooking = (int)$idBooking;
+        $booking   = $this->bookingAdminModel->findWithRoom($idBooking);
+
         if (!$booking) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=manage',
@@ -768,6 +778,7 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
+
         if (empty($booking['checkin_time'])) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=manage',
@@ -775,10 +786,11 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-        $bookingModel->addStatus($idBooking, 'selesai');
+
+        $this->bookingAdminModel->addStatus($idBooking, 'selesai');
+
         if (!empty($booking['id_pj'])) {
-            $accSuspend = new AccountSuspend();
-            $accSuspend->resetCounter((int)$booking['id_pj']);
+            $this->accountSuspendModel->resetCounter((int)$booking['id_pj']);
         }
 
         return $this->redirectWithMessage(
@@ -802,14 +814,14 @@ class AdminBookingController extends Controller
                 );
             }
 
-            $bookingModel = new BookingAdmin();
-            $count        = $bookingModel->cancelBookingsByDate($tanggal);
+            $count = $this->bookingAdminModel->cancelBookingsByDate($tanggal);
 
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=manage',
                 "Penutupan perpustakaan berhasil. {$count} booking pada tanggal {$tanggal} dibatalkan."
             );
         }
+
         $this->view('admin/close-date', []);
     }
 
@@ -828,10 +840,7 @@ class AdminBookingController extends Controller
         }
         $idBooking = (int)$idBooking;
 
-        $bookingModel    = new BookingAdmin();
-        $rescheduleModel = new BookingReschedule();
-
-        $booking = $bookingModel->findAdminDetail($idBooking);
+        $booking = $this->bookingAdminModel->findAdminDetail($idBooking);
         if (!$booking) {
             $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=manage',
@@ -850,7 +859,7 @@ class AdminBookingController extends Controller
             return;
         }
 
-        $reschedule = $rescheduleModel->findLatestByBooking($idBooking);
+        $reschedule = $this->bookingRescheduleModel->findLatestByBooking($idBooking);
         if (!$reschedule) {
             $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=detail&id=' . $idBooking,
@@ -861,12 +870,12 @@ class AdminBookingController extends Controller
         }
 
         $idReschedule = (int)$reschedule['id_reschedule'];
-        $newMembers   = $rescheduleModel->getMembers($idReschedule);
+        $newMembers   = $this->bookingRescheduleModel->getMembers($idReschedule);
 
         $this->view('admin/reschedule_detail', [
-            'booking'     => $booking,
-            'reschedule'  => $reschedule,
-            'newMembers'  => $newMembers,
+            'booking'    => $booking,
+            'reschedule' => $reschedule,
+            'newMembers' => $newMembers,
         ]);
     }
 
@@ -884,8 +893,7 @@ class AdminBookingController extends Controller
             return;
         }
 
-        $bookingModel = new BookingAdmin();
-        $result       = $bookingModel->approveReschedule($idReschedule);
+        $result = $this->bookingAdminModel->approveReschedule($idReschedule);
 
         if (empty($result['success'])) {
             $this->redirectWithMessage(
@@ -895,6 +903,7 @@ class AdminBookingController extends Controller
             );
             return;
         }
+
         $idBooking = $result['id_booking'] ?? null;
         $targetUrl = $idBooking
             ? 'index.php?controller=adminBooking&action=detail&id=' . (int)$idBooking
@@ -923,8 +932,7 @@ class AdminBookingController extends Controller
             return;
         }
 
-        $bookingModel = new BookingAdmin();
-        $result       = $bookingModel->rejectReschedule($idReschedule, $alasan);
+        $result = $this->bookingAdminModel->rejectReschedule($idReschedule, $alasan);
 
         if (empty($result['success'])) {
             $this->redirectWithMessage(

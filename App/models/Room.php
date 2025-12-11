@@ -340,4 +340,139 @@ class Room extends Model
             'id'                 => $idRuangan,
         ]);
     }
+
+    public function createRoom(array $data): int
+    {
+        $sql = "INSERT INTO " . self::$table . "
+        (
+            nama_ruangan,
+            lokasi,
+            kategori,
+            kapasitas_min,
+            kapasitas_max,
+            status_operasional,
+            foto_ruangan
+        )
+        VALUES
+        (
+            :nama_ruangan,
+            :lokasi,
+            :kategori,
+            :kapasitas_min,
+            :kapasitas_max,
+            :status_operasional,
+            :foto_ruangan
+        )";
+
+        $stmt = self::$db->prepare($sql);
+        $stmt->execute([
+            'nama_ruangan'       => $data['nama_ruangan'],
+            'lokasi'             => $data['lokasi'] ?? null,
+            'kategori'           => $data['kategori'] ?? null,
+            'kapasitas_min'      => (int)$data['kapasitas_min'],
+            'kapasitas_max'      => (int)$data['kapasitas_max'],
+            'status_operasional' => $data['status_operasional'] ?? 'aktif',
+            'foto_ruangan'       => $data['foto_ruangan'] ?? null,
+        ]);
+
+        return (int) self::$db->lastInsertId();
+    }
+    public function getAllFacilities(): array
+    {
+        $sql = "SELECT id_fasilitas, nama_fasilitas 
+            FROM fasilitas
+            ORDER BY nama_fasilitas ASC";
+
+        $stmt = self::$db->query($sql);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    public function getFacilityIdsByRoom(int $idRuangan): array
+    {
+        $sql = "SELECT id_facility
+            FROM fasilitas_ruangan
+            WHERE id_ruangan = :id";
+
+        $stmt = self::$db->prepare($sql);
+        $stmt->execute(['id' => $idRuangan]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return array_map('intval', array_column($rows, 'id_facility'));
+    }
+
+    public function syncFacilities(int $idRuangan, array $facilityIds): void
+    {
+        // Hapus dulu fasilitas lama
+        $del = self::$db->prepare(
+            "DELETE FROM fasilitas_ruangan WHERE id_ruangan = :id_ruangan"
+        );
+        $del->execute(['id_ruangan' => $idRuangan]);
+
+        if (empty($facilityIds)) {
+            return;
+        }
+
+        $sql  = "INSERT INTO fasilitas_ruangan (id_ruangan, id_facility)
+             VALUES (:id_ruangan, :id_facility)";
+        $stmt = self::$db->prepare($sql);
+
+        foreach ($facilityIds as $fid) {
+            // pastikan numeric
+            if (!ctype_digit((string)$fid)) {
+                continue;
+            }
+
+            $stmt->execute([
+                'id_ruangan'  => $idRuangan,
+                'id_facility' => (int)$fid,
+            ]);
+        }
+    }
+    public function existsByName(string $namaRuangan): bool
+    {
+        $sql = "SELECT id_ruangan 
+            FROM " . self::$table . " 
+            WHERE nama_ruangan = :nama 
+            LIMIT 1";
+
+        $stmt = self::$db->prepare($sql);
+        $stmt->execute(['nama' => $namaRuangan]);
+
+        return (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+    }
+    public function deleteRoom(int $idRuangan): bool
+    {
+        try {
+            self::$db->beginTransaction();
+
+            // Hapus relasi fasilitas
+            $delFasilitas = self::$db->prepare(
+                "DELETE FROM fasilitas_ruangan WHERE id_ruangan = :id"
+            );
+            $delFasilitas->execute(['id' => $idRuangan]);
+
+            // (Opsional) hapus jadwal ruangan kalau ada tabel jadwal_ruangan
+            $delJadwal = self::$db->prepare(
+                "DELETE FROM jadwal_ruangan WHERE id_ruangan = :id"
+            );
+            $delJadwal->execute(['id' => $idRuangan]);
+
+            // Hapus ruangan utamanya
+            $delRoom = self::$db->prepare(
+                "DELETE FROM " . self::$table . " 
+             WHERE id_ruangan = :id
+             LIMIT 1"
+            );
+            $delRoom->execute(['id' => $idRuangan]);
+
+            self::$db->commit();
+
+            return $delRoom->rowCount() > 0;
+        } catch (\Throwable $e) {
+            if (self::$db->inTransaction()) {
+                self::$db->rollBack();
+            }
+            // Kalau kena FK bookings, akan masuk sini → controller kasih pesan error "tidak bisa dihapus"
+            return false;
+        }
+    }
 }

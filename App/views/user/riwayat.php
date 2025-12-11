@@ -89,49 +89,41 @@
                                 // Badge style
                                 $badgeClass = 'bg-gray-100 text-gray-600';
                                 $statusLabel = 'Pending';
-                                $statusIcon = '⏳';
 
                                 switch ($statusLower) {
                                     case 'approved':
                                         $badgeClass = 'bg-emerald-50 text-emerald-700';
                                         $statusLabel = 'Disetujui';
-                                        $statusIcon = '✔';
                                         break;
 
                                     case 'rejected':
                                         $badgeClass = 'bg-red-50 text-red-600';
                                         $statusLabel = 'Ditolak';
-                                        $statusIcon = '✖';
                                         break;
 
                                     case 'selesai':
                                         $badgeClass = 'bg-blue-50 text-blue-700';
                                         $statusLabel = 'Selesai';
-                                        $statusIcon = '✓';
                                         break;
 
                                     case 'cancelled':
                                         $badgeClass = 'bg-gray-100 text-gray-500';
                                         $statusLabel = 'Dibatalkan';
-                                        $statusIcon = '🚫';
                                         break;
 
                                     case 'reschedule_pending':
                                         $badgeClass = 'bg-purple-50 text-purple-700';
                                         $statusLabel = 'Menunggu Reschedule';
-                                        $statusIcon = '🔁';
                                         break;
 
                                     case 'reschedule_approved':
                                         $badgeClass = 'bg-purple-50 text-purple-700';
                                         $statusLabel = 'Reschedule Disetujui';
-                                        $statusIcon = '🔁';
                                         break;
 
                                     case 'reschedule_rejected':
                                         $badgeClass = 'bg-red-50 text-red-600';
                                         $statusLabel = 'Reschedule Ditolak';
-                                        $statusIcon = '✖';
                                         break;
                                 }
 
@@ -160,7 +152,7 @@
 
                                     <td class="py-3 px-3 text-center">
                                         <span class="px-3 py-1 rounded-full text-xs font-medium border <?= $badgeClass ?>">
-                                            <?= $statusIcon ?> <?= $statusLabel ?>
+                                            <?= $statusLabel ?>
                                         </span>
                                     </td>
 

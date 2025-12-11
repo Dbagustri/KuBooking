@@ -46,13 +46,37 @@ class AuthController extends Controller
             return;
         }
 
+        // Pastikan session aktif (kalau front controller sudah session_start, ini aman)
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
         $nim      = $this->input('npm'); // nim/nip
         $password = $this->input('password');
+        $captcha  = $this->input('captcha');
 
-        if (!$nim || !$password) {
-            $this->view('auth/login', ['error' => 'NIM/NIP dan password wajib diisi']);
+        if (!$nim || !$password || !$captcha) {
+            $this->view('auth/login', [
+                'error' => 'NIM/NIP, password, dan CAPTCHA wajib diisi'
+            ]);
             return;
         }
+
+        // ====== VALIDASI CAPTCHA ======
+        $sessionCaptcha = $_SESSION['captcha_code'] ?? null;
+
+        if (!$sessionCaptcha || strcasecmp($captcha, $sessionCaptcha) !== 0) {
+            // Hapus supaya tidak bisa brute force dengan kode yang sama
+            unset($_SESSION['captcha_code']);
+
+            $this->view('auth/login', [
+                'error' => 'Kode CAPTCHA yang Anda masukkan tidak sesuai'
+            ]);
+            return;
+        }
+
+        // Setelah lolos, hapus juga biar tidak dipakai ulang
+        unset($_SESSION['captcha_code']);
 
         $accountModel    = new Account();
         $registrasiModel = new Registrasi();

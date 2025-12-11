@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Kelola Anggota | Kubooking</title>
+    <title>Kelola Admin | Kubooking</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -39,17 +39,17 @@
         </div>
 
         <?php
-        // Data dari controller
-        $users       = $users       ?? [];
+        // Data dari controller (SuperAdminController)
+        $admins      = $admins      ?? [];
         $currentPage = isset($currentPage) ? (int)$currentPage : (int)($_GET['page'] ?? 1);
         if ($currentPage < 1) $currentPage = 1;
         $totalPages  = isset($totalPages) ? (int)$totalPages : 1;
-        $filter      = $filter      ?? 'all';
-        $search      = $search      ?? '';
+        $statusFilter = $statusFilter ?? 'all';
+        $search       = $search       ?? '';
 
-        // Base URL untuk pagination (mirip kelolabooking)
-        $pageBaseUrl = 'index.php?controller=admin&action=anggota'
-            . '&filter=' . urlencode($filter)
+        // Base URL untuk pagination & filter
+        $pageBaseUrl = 'index.php?controller=superAdmin&action=kelolaAdmin'
+            . '&status=' . urlencode($statusFilter)
             . '&q=' . urlencode($search);
         ?>
 
@@ -58,35 +58,32 @@
             <!-- HEADER -->
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
-                    <h1 class="text-2xl font-bold text-[#1e3a5f]">Kelola Anggota</h1>
+                    <h1 class="text-2xl font-bold text-[#1e3a5f]">Kelola Admin</h1>
                     <p class="text-sm text-gray-500 mt-1">
-                        Lihat dan kelola data akun mahasiswa, dosen, dan tendik.
+                        Tambah, ubah, dan kelola akun admin dan super admin.
                     </p>
                 </div>
 
-                <!-- Kalau mau, bisa tambahkan tombol "Tambah Anggota" di sini -->
-
-                <a href="index.php?controller=admin&action=tambahAnggota"
+                <!-- TOMBOL TAMBAH ADMIN -->
+                <a href="index.php?controller=superAdmin&action=createAdmin"
                     class="inline-flex items-center px-4 py-2 rounded-lg text-sm font-semibold 
                           bg-[#1e3a5f] text-white hover:bg-[#163152] shadow">
-                    Tambah Anggota
+                    Tambah Admin
                 </a>
-
             </div>
 
             <!-- FILTER & SEARCH -->
             <form method="get"
                 class="flex flex-col lg:flex-row lg:items-center lg:space-x-4 space-y-3 lg:space-y-0 mt-2">
-                <input type="hidden" name="controller" value="admin">
-                <input type="hidden" name="action" value="anggota">
+                <input type="hidden" name="controller" value="superAdmin">
+                <input type="hidden" name="action" value="kelolaAdmin">
 
-                <!-- FILTER ROLE -->
-                <select name="filter"
+                <!-- FILTER STATUS -->
+                <select name="status"
                     class="bg-white border border-gray-300 rounded-full px-4 py-2 text-sm shadow w-full lg:w-auto">
-                    <option value="all" <?= $filter === 'all' ? 'selected' : '' ?>>Semua Role</option>
-                    <option value="mahasiswa" <?= $filter === 'mahasiswa' ? 'selected' : '' ?>>Mahasiswa</option>
-                    <option value="dosen" <?= $filter === 'dosen' ? 'selected' : '' ?>>Dosen</option>
-                    <option value="tendik" <?= $filter === 'tendik' ? 'selected' : '' ?>>Tendik</option>
+                    <option value="all" <?= $statusFilter === 'all' ? 'selected' : '' ?>>Semua Status</option>
+                    <option value="aktif" <?= $statusFilter === 'aktif' ? 'selected' : '' ?>>Aktif</option>
+                    <option value="nonaktif" <?= $statusFilter === 'nonaktif' ? 'selected' : '' ?>>Nonaktif</option>
                 </select>
 
                 <!-- SEARCH -->
@@ -94,7 +91,7 @@
                     <input type="text"
                         name="q"
                         value="<?= htmlspecialchars($search) ?>"
-                        placeholder="Cari nama, email, NIM/NIP, jurusan, atau unit"
+                        placeholder="Cari nama, email, atau NIM/NIP admin"
                         class="flex-1 text-sm bg-transparent focus:outline-none">
                 </div>
 
@@ -104,7 +101,7 @@
                 </button>
             </form>
 
-            <!-- TABEL ANGGOTA -->
+            <!-- TABEL ADMIN -->
             <div class="mt-4">
                 <div class="bg-white shadow rounded-lg border border-slate-100 overflow-hidden">
                     <div class="overflow-x-auto">
@@ -114,7 +111,6 @@
                                     <th class="px-4 py-3">Nama</th>
                                     <th class="px-4 py-3">NIM / NIP</th>
                                     <th class="px-4 py-3">Email</th>
-                                    <th class="px-4 py-3">Jurusan / Unit</th>
                                     <th class="px-4 py-3">Role</th>
                                     <th class="px-4 py-3">Status Akun</th>
                                     <th class="px-4 py-3 text-center">Aksi</th>
@@ -122,38 +118,24 @@
                             </thead>
 
                             <tbody>
-                                <?php if (!empty($users)): ?>
-                                    <?php foreach ($users as $i => $u): ?>
+                                <?php if (!empty($admins)): ?>
+                                    <?php foreach ($admins as $i => $a): ?>
                                         <?php
-                                        $id          = (int)($u['id_account'] ?? 0);
-                                        $nama        = $u['nama']          ?? '-';
-                                        $nimnip      = $u['nim_nip']       ?? '-';
-                                        $email       = $u['email']         ?? '-';
-                                        $jurusan     = $u['jurusan']       ?? '';
-                                        $prodi       = $u['prodi']         ?? '';
-                                        $unitJurusan = $u['unit_jurusan']  ?? '';
-                                        $role        = $u['role']          ?? '-';
-                                        $statusAktif = $u['status_aktif']  ?? 'nonaktif';
-
-                                        // Label jurusan/unit
-                                        $jurusanText = '-';
-                                        if ($role === 'mahasiswa') {
-                                            $jurusanText = trim($jurusan . ' - ' . $prodi);
-                                        } elseif ($role === 'dosen') {
-                                            $jurusanText = $jurusan ?: '-';
-                                        } elseif ($role === 'tendik') {
-                                            $jurusanText = $unitJurusan ?: '-';
-                                        }
+                                        $id          = (int)($a['id_account'] ?? 0);
+                                        $nama        = $a['nama']         ?? '-';
+                                        $nimnip      = $a['nim_nip']      ?? '-';
+                                        $email       = $a['email']        ?? '-';
+                                        $role        = $a['role']         ?? '-';
+                                        $statusAktif = $a['status_aktif'] ?? 'nonaktif';
 
                                         // Badge role
                                         $roleLabel = ucfirst($role);
                                         $roleBadgeClass = 'bg-slate-100 text-slate-700';
-                                        if ($role === 'mahasiswa') {
+                                        if ($role === 'admin') {
                                             $roleBadgeClass = 'bg-blue-100 text-blue-800';
-                                        } elseif ($role === 'dosen') {
-                                            $roleBadgeClass = 'bg-emerald-100 text-emerald-800';
-                                        } elseif ($role === 'tendik') {
-                                            $roleBadgeClass = 'bg-amber-100 text-amber-800';
+                                        } elseif ($role === 'super_admin') {
+                                            $roleBadgeClass = 'bg-purple-100 text-purple-800';
+                                            $roleLabel = 'Super Admin';
                                         }
 
                                         // Badge status
@@ -168,11 +150,9 @@
                                         <tr class="<?= $rowBase ?> text-gray-800 border-b last:border-b-0 align-top">
                                             <!-- NAMA -->
                                             <td class="px-4 py-3">
-                                                <div class="flex flex-col gap-0.5">
-                                                    <span class="font-medium text-slate-900">
-                                                        <?= htmlspecialchars($nama) ?>
-                                                    </span>
-                                                </div>
+                                                <span class="font-medium text-slate-900">
+                                                    <?= htmlspecialchars($nama) ?>
+                                                </span>
                                             </td>
 
                                             <!-- NIM / NIP -->
@@ -186,13 +166,6 @@
                                             <td class="px-4 py-3">
                                                 <span class="text-slate-800">
                                                     <?= htmlspecialchars($email) ?>
-                                                </span>
-                                            </td>
-
-                                            <!-- JURUSAN / UNIT -->
-                                            <td class="px-4 py-3">
-                                                <span class="text-slate-800 text-xs">
-                                                    <?= htmlspecialchars($jurusanText) ?>
                                                 </span>
                                             </td>
 
@@ -215,8 +188,8 @@
                                                 <div class="relative inline-block text-left">
                                                     <button type="button"
                                                         class="inline-flex w-8 h-8 items-center justify-center rounded-full
-                                                                   hover:bg-gray-200 focus:outline-none focus:ring-2 
-                                                                   focus:ring-offset-2 focus:ring-slate-400"
+                                                               hover:bg-gray-200 focus:outline-none focus:ring-2 
+                                                               focus:ring-offset-2 focus:ring-slate-400"
                                                         onclick="toggleMenu(this)">
                                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
                                                             fill="currentColor" class="w-4 h-4 text-gray-600">
@@ -225,27 +198,27 @@
                                                     </button>
 
                                                     <div class="menu-panel hidden origin-top-right absolute right-0 mt-2 w-52 rounded-md shadow-lg
-            bg-white ring-1 ring-black ring-opacity-5 z-50">
+                                                            bg-white ring-1 ring-black ring-opacity-5 z-50">
                                                         <div class="py-1 text-sm text-gray-700">
 
                                                             <!-- DETAIL -->
-                                                            <a href="index.php?controller=admin&action=detailUser&id=<?= $id ?>"
+                                                            <a href="index.php?controller=superAdmin&action=detailAdmin&id=<?= $id ?>"
                                                                 class="block px-4 py-2 hover:bg-gray-100">
-                                                                Detail Anggota
+                                                                Detail Admin
                                                             </a>
 
                                                             <!-- EDIT -->
-                                                            <a href="index.php?controller=admin&action=editUser&id=<?= $id ?>"
+                                                            <a href="index.php?controller=superAdmin&action=editAdmin&id=<?= $id ?>"
                                                                 class="block px-4 py-2 hover:bg-gray-100">
                                                                 Edit
                                                             </a>
 
                                                             <!-- AKTIF / NONAKTIF -->
                                                             <?php if ($statusAktif === 'aktif'): ?>
-                                                                <form action="index.php?controller=admin&action=setUserStatus"
+                                                                <form action="index.php?controller=superAdmin&action=setAdminStatus"
                                                                     method="POST"
-                                                                    onsubmit="return confirm('Nonaktifkan / suspend akun ini?');">
-                                                                    <input type="hidden" name="id_user" value="<?= $id ?>">
+                                                                    onsubmit="return confirm('Nonaktifkan akun admin ini?');">
+                                                                    <input type="hidden" name="id_admin" value="<?= $id ?>">
                                                                     <input type="hidden" name="status" value="nonaktif">
                                                                     <button type="submit"
                                                                         class="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600">
@@ -253,10 +226,10 @@
                                                                     </button>
                                                                 </form>
                                                             <?php else: ?>
-                                                                <form action="index.php?controller=admin&action=setUserStatus"
+                                                                <form action="index.php?controller=superAdmin&action=setAdminStatus"
                                                                     method="POST"
-                                                                    onsubmit="return confirm('Aktifkan kembali akun ini?');">
-                                                                    <input type="hidden" name="id_user" value="<?= $id ?>">
+                                                                    onsubmit="return confirm('Aktifkan kembali akun admin ini?');">
+                                                                    <input type="hidden" name="id_admin" value="<?= $id ?>">
                                                                     <input type="hidden" name="status" value="aktif">
                                                                     <button type="submit"
                                                                         class="w-full text-left px-4 py-2 hover:bg-emerald-50 text-emerald-700">
@@ -266,10 +239,10 @@
                                                             <?php endif; ?>
 
                                                             <!-- HAPUS -->
-                                                            <form action="index.php?controller=admin&action=deleteUser"
+                                                            <form action="index.php?controller=superAdmin&action=deleteAdmin"
                                                                 method="POST"
-                                                                onsubmit="return confirm('Yakin ingin menghapus akun ini?');">
-                                                                <input type="hidden" name="id_user" value="<?= $id ?>">
+                                                                onsubmit="return confirm('Yakin ingin menghapus akun admin ini?');">
+                                                                <input type="hidden" name="id_admin" value="<?= $id ?>">
                                                                 <button type="submit"
                                                                     class="w-full text-left px-4 py-2 border-t hover:bg-red-50 text-red-600">
                                                                     Hapus
@@ -284,11 +257,11 @@
                                     <?php endforeach; ?>
                                 <?php else: ?>
                                     <tr>
-                                        <td colspan="7" class="px-4 py-8 text-center text-gray-500">
-                                            <?php if ($filter !== 'all' || $search !== ''): ?>
-                                                Tidak ada anggota yang cocok dengan filter / kata kunci.
+                                        <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                                            <?php if ($statusFilter !== 'all' || $search !== ''): ?>
+                                                Tidak ada admin yang cocok dengan filter / kata kunci.
                                             <?php else: ?>
-                                                Belum ada data anggota.
+                                                Belum ada data admin.
                                             <?php endif; ?>
                                         </td>
                                     </tr>
@@ -298,8 +271,8 @@
                     </div>
                 </div>
 
-                <!-- PAGINATION (persis gaya Kelola Booking) -->
-                <?php if ($totalPages > 1 && !empty($users)): ?>
+                <!-- PAGINATION -->
+                <?php if ($totalPages > 1 && !empty($admins)): ?>
                     <div class="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
                         <div class="text-slate-500">
                             Halaman <span class="font-semibold"><?= $currentPage ?></span> dari

@@ -223,7 +223,7 @@ $role = $role ?? 'mahasiswa';
                         <input
                             type="file"
                             name="screenshot"
-                            accept="image/*"
+                            accept="image/jpeg,image/png"
                             class="w-full text-sm text-gray-500
                                    file:mr-4 file:py-2 file:px-4
                                    file:rounded-md file:border-0
@@ -252,7 +252,7 @@ $role = $role ?? 'mahasiswa';
         </div>
 
         <div class="hidden md:block">
-            <img src="rapat.png" alt="Ilustrasi Ruangan Rapat" class="w-full h-full object-cover">
+            <img src="img/rapat.png" alt="Ilustrasi Ruangan Rapat" class="w-full h-full object-cover">
         </div>
 
     </div>

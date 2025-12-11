@@ -73,44 +73,52 @@ class Account extends Model
         ]);
         return self::$db->lastInsertId();
     }
-    public function getAdminUserList(int $page = 1, string $filter = '', string $search = '')
-    {
-        $limit  = 10;
+    public function getAdminUserList(
+        int $page = 1,
+        int $perPage = 10,
+        string $filter = 'all',
+        string $search = ''
+    ) {
+        $limit  = $perPage;
         $offset = ($page - 1) * $limit;
 
-        // kalau memang mau sembunyikan admin/super_admin di list default
+        // Sembunyikan admin/super_admin
         $where  = "WHERE role NOT IN ('admin','super_admin')";
         $params = [];
 
-        if ($filter !== '') {
+        // FILTER ROLE (mahasiswa / dosen / tendik / all)
+        if ($filter !== '' && $filter !== 'all') {
             $where .= " AND role = :filter";
             $params[':filter'] = $filter;
         }
 
+        // SEARCH (nama, email, jurusan, unit, nim/nip)
         if ($search !== '') {
-            $where .= " AND (nama LIKE :search 
-                     OR email LIKE :search 
-                     OR jurusan LIKE :search 
-                     OR unit_jurusan LIKE :search 
-                     OR nim_nip LIKE :search)";
+            $where .= " AND (
+            nama         LIKE :search
+            OR email     LIKE :search
+            OR jurusan   LIKE :search
+            OR unit_jurusan LIKE :search
+            OR nim_nip   LIKE :search
+        )";
             $params[':search'] = "%{$search}%";
         }
 
-        // hitung total data
+        // Hitung total data
         $sqlCount  = "SELECT COUNT(*) FROM " . self::$table . " {$where}";
         $stmtCount = self::$db->prepare($sqlCount);
         $stmtCount->execute($params);
         $totalRows  = (int)$stmtCount->fetchColumn();
         $totalPages = $totalRows > 0 ? (int)ceil($totalRows / $limit) : 1;
 
-        // AMBIL DATA LIST USER
+        // Ambil data pengguna
         $sql = "SELECT 
                 id_account,
                 nama,
-                nim_nip,          -- ✅ tambahkan ini
+                nim_nip,
                 email,
                 jurusan,
-                unit_jurusan,     -- ✅ dan ini biar view nggak kosong
+                unit_jurusan,
                 prodi,
                 role,
                 status_aktif,
@@ -124,20 +132,21 @@ class Account extends Model
         foreach ($params as $k => $v) {
             $stmt->bindValue($k, $v);
         }
-        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->bindValue(':limit', $limit, \PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, \PDO::PARAM_INT);
         $stmt->execute();
 
-        $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $data = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
         return [
-            'users'        => $data,
+            'data'         => $data,
             'current_page' => $page,
             'total_pages'  => $totalPages,
             'filter'       => $filter,
             'search'       => $search,
         ];
     }
+
 
     public function updateBasicProfile(int $id, array $data): bool
     {
@@ -204,5 +213,46 @@ class Account extends Model
 
         $stmt = self::$db->prepare($sql);
         return $stmt->execute(['id' => $idAccount]);
+    }
+    public function createManual(array $data): int
+    {
+        $sql = "INSERT INTO Account 
+            (nama, email, nim_nip, jurusan, unit_jurusan, role, password, 
+             angkatan, durasi_studi, aktif_sampai, status_aktif)
+            VALUES
+            (:nama, :email, :nim_nip, :jurusan, :unit_jurusan, :role, :password,
+             :angkatan, :durasi_studi, :aktif_sampai, :status_aktif)";
+
+        $stmt = self::$db->prepare($sql);
+        $stmt->execute([
+            ':nama'          => $data['nama'],
+            ':email'         => $data['email'],
+            ':nim_nip'       => $data['nim_nip'],
+            ':jurusan'       => $data['jurusan'],
+            ':unit_jurusan'  => $data['unit_jurusan'],
+            ':role'          => $data['role'],
+            ':password'      => $data['password'],
+            ':angkatan'      => $data['angkatan'],
+            ':durasi_studi'  => $data['durasi_studi'],
+            ':aktif_sampai'  => $data['aktif_sampai'],
+            ':status_aktif'  => $data['status_aktif'] ?? 'aktif',
+        ]);
+
+        return (int)self::$db->lastInsertId();
+    }
+
+    // Cek email / NIMNIP sudah ada
+    public function existsByEmail(string $email): bool
+    {
+        $stmt = self::$db->prepare("SELECT 1 FROM Account WHERE email = :email LIMIT 1");
+        $stmt->execute([':email' => $email]);
+        return (bool)$stmt->fetchColumn();
+    }
+
+    public function existsByNimNip(string $nimNip): bool
+    {
+        $stmt = self::$db->prepare("SELECT 1 FROM Account WHERE nim_nip = :nim_nip LIMIT 1");
+        $stmt->execute([':nim_nip' => $nimNip]);
+        return (bool)$stmt->fetchColumn();
     }
 }
