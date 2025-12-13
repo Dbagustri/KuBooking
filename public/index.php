@@ -5,6 +5,8 @@ require __DIR__ . '/../app/core/model.php';
 require __DIR__ . '/../app/core/controller.php';
 require __DIR__ . '/../app/core/auth.php';
 require __DIR__ . '/../app/core/router.php';
+require __DIR__ . '/../app/core/mailer.php';
+require __DIR__ . '/../app/core/NotificationService.php';
 
 require __DIR__ . '/../app/controllers/authcontroller.php';
 require __DIR__ . '/../app/controllers/admincontroller.php';
@@ -28,6 +30,9 @@ require __DIR__ . '/../app/models/bookingadmin.php';
 require __DIR__ . '/../app/models/laporan.php';
 require __DIR__ . '/../app/models/feedback.php';
 require __DIR__ . '/../app/models/adminAccount.php';
+require __DIR__ . '/../app/models/TemplateNotifikasi.php';
+
+require __DIR__ . '/../vendor/autoload.php';
 
 date_default_timezone_set('Asia/Jakarta');
 

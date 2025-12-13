@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Core\NotificationService;
 use App\Core\Controller;
 use App\Core\Auth;
 use App\Models\Registrasi;
@@ -74,6 +75,7 @@ class AdminController extends Controller
         ]);
     }
 
+
     public function approveUser()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -93,27 +95,40 @@ class AdminController extends Controller
         $role     = $reg['role_registrasi'];
         $academic = $this->deriveAcademicData($reg, $role);
 
+        // 1️⃣ Buat account
         $this->accountModel->createFromRegistrasi([
-            'id_registrasi'    => $reg['id_registrasi'],
-            'nama'             => $reg['nama'],
-            'email'            => $reg['email'],
-            'jurusan'          => $reg['jurusan'] ?? null,
-            'prodi'            => $reg['prodi'] ?? null,
-            'nim_nip'          => $reg['nim_nip'],
-            'unit_jurusan'     => $reg['unit_jurusan'] ?? null,
-            'password'         => $reg['password'],
-            'role'             => $role,
-            'angkatan'         => $academic['angkatan'],
-            'durasi_studi'     => $academic['durasi_studi'],
-            'aktif_sampai'     => $academic['aktif_sampai'],
-            'status_aktif'     => 'aktif',
+            'id_registrasi'     => $reg['id_registrasi'],
+            'nama'              => $reg['nama'],
+            'email'             => $reg['email'],
+            'jurusan'           => $reg['jurusan'] ?? null,
+            'prodi'             => $reg['prodi'] ?? null,
+            'nim_nip'           => $reg['nim_nip'],
+            'unit_jurusan'      => $reg['unit_jurusan'] ?? null,
+
+            'password'          => $reg['password'],
+            'role'              => $role,
+            'angkatan'          => $academic['angkatan'],
+            'durasi_studi'      => $academic['durasi_studi'],
+            'aktif_sampai'      => $academic['aktif_sampai'],
+            'status_aktif'      => 'aktif',
             'screenshot_kubaca' => $reg['screenshot_kubaca'] ?? null,
         ]);
-
         $this->registrasiModel->updateStatus($id, 'approved');
-
+        $notif = new NotificationService();
+        $notif->sendByJenis(
+            'user_approved',
+            $reg['email'],
+            $reg['nama'],
+            [
+                'nama'    => $reg['nama'],
+                'email'   => $reg['email'],
+                'nim_nip' => $reg['nim_nip'],
+                'role'    => $role,
+            ]
+        );
         $this->redirect('index.php?controller=admin&action=verifikasiUser');
     }
+
 
     public function rejectUser()
     {
