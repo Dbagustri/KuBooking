@@ -21,8 +21,13 @@ class AdminController extends Controller
     private $bookingModel;
     /** @var Room */
     private $roomModel;
+    /** @var NotificationService */
+    private $notif;
     /** @var Laporan */
     private $laporanModel;
+
+    private const PER_PAGE = 5;
+
     public function __construct()
     {
         $this->registrasiModel = new Registrasi();
@@ -30,7 +35,18 @@ class AdminController extends Controller
         $this->bookingModel    = new BookingAdmin();
         $this->roomModel       = new Room();
         $this->laporanModel    = new Laporan();
+        $this->notif = new NotificationService();
     }
+    private function sendNotif(string $jenis, string $email, string $nama, array $data = []): void
+    {
+        if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            error_log("[NOTIF] Invalid email: {$email}, jenis={$jenis}");
+            return;
+        }
+        $data = array_merge(['nama' => $nama], $data);
+        $this->notif->sendByJenis($jenis, $email, $nama, $data);
+    }
+
 
     public function home()
     {
@@ -41,21 +57,23 @@ class AdminController extends Controller
         $ruang_kosong_hari_ini  = $this->roomModel->countActive();
         $user_aktif             = $this->accountModel->countActive();
 
-        $activeTab    = $_GET['tab'] ?? 'booking';
-        $booking_page = isset($_GET['booking_page']) ? (int)$_GET['booking_page'] : 1;
-        if ($booking_page < 1) $booking_page = 1;
+        $activeTab = $_GET['tab'] ?? 'booking';
 
-        $bookingLimit  = 10;
+        // booking pending (pagination sendiri)
+        $booking_page  = max(1, (int)($_GET['booking_page'] ?? 1));
+        $bookingLimit  = self::PER_PAGE;
         $bookingResult = $this->bookingModel->getPendingWithPagination($booking_page, $bookingLimit);
-        $booking_pending     = $bookingResult['list'];
-        $booking_total_pages = $bookingResult['total_pages'];
 
-        $user_page = isset($_GET['user_page']) ? (int)$_GET['user_page'] : 1;
-        if ($user_page < 1) $user_page = 1;
+        $booking_pending     = $bookingResult['list'] ?? [];
+        $booking_total_pages = $bookingResult['total_pages'] ?? 1;
 
-        $userResult       = $this->registrasiModel->getPendingUsers($user_page, 'pending', '');
-        $user_pending     = $userResult['list'];
-        $user_total_pages = $userResult['total_pages'];
+        // user pending (pagination sendiri)
+        $user_page   = max(1, (int)($_GET['user_page'] ?? 1));
+        $userLimit   = self::PER_PAGE;
+        $userResult  = $this->registrasiModel->getPendingUsers($user_page, 'pending', '', $userLimit);
+
+        $user_pending     = $userResult['list'] ?? [];
+        $user_total_pages = $userResult['total_pages'] ?? 1;
 
         $this->view('admin/home', [
             'verifikasi_hari_ini'   => $verifikasi_hari_ini,
@@ -76,6 +94,7 @@ class AdminController extends Controller
     }
 
 
+
     public function approveUser()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -85,17 +104,13 @@ class AdminController extends Controller
             $this->redirect('index.php?controller=admin&action=verifikasiUser');
             return;
         }
-
         $reg = $this->registrasiModel->findById($id);
         if (!$reg || $reg['status'] !== 'pending') {
             $this->redirect('index.php?controller=admin&action=verifikasiUser');
             return;
         }
-
         $role     = $reg['role_registrasi'];
         $academic = $this->deriveAcademicData($reg, $role);
-
-        // 1️⃣ Buat account
         $this->accountModel->createFromRegistrasi([
             'id_registrasi'     => $reg['id_registrasi'],
             'nama'              => $reg['nama'],
@@ -114,22 +129,14 @@ class AdminController extends Controller
             'screenshot_kubaca' => $reg['screenshot_kubaca'] ?? null,
         ]);
         $this->registrasiModel->updateStatus($id, 'approved');
-        $notif = new NotificationService();
-        $notif->sendByJenis(
-            'user_approved',
-            $reg['email'],
-            $reg['nama'],
-            [
-                'nama'    => $reg['nama'],
-                'email'   => $reg['email'],
-                'nim_nip' => $reg['nim_nip'],
-                'role'    => $role,
-            ]
-        );
+        $this->sendNotif('user_approved', $reg['email'], $reg['nama'], [
+            'email'   => $reg['email'],
+            'nim_nip' => $reg['nim_nip'],
+            'role'    => $role,
+        ]);
+
         $this->redirect('index.php?controller=admin&action=verifikasiUser');
     }
-
-
     public function rejectUser()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -140,7 +147,16 @@ class AdminController extends Controller
             return;
         }
 
-        $this->registrasiModel->updateStatus($id, 'rejected');
+        $reg = $this->registrasiModel->findById((int)$id);
+        if ($reg && ($reg['status'] ?? '') === 'pending') {
+            $alasan = trim($this->input('alasan') ?? ($_POST['alasan'] ?? ''));
+            $this->registrasiModel->updateStatus($id, 'rejected');
+            $this->sendNotif('user_rejected', (string)$reg['email'], (string)$reg['nama'], [
+                'alasan' => $alasan !== '' ? $alasan : 'Tidak ada keterangan.',
+            ]);
+        } else {
+            $this->registrasiModel->updateStatus($id, 'rejected');
+        }
 
         $this->redirect('index.php?controller=admin&action=verifikasiUser');
     }
@@ -151,7 +167,6 @@ class AdminController extends Controller
 
         if ($role === 'mahasiswa') {
             $nimDigits = preg_replace('/\D/', '', $reg['nim_nip']);
-
             $angkatan = $nowYear;
             $durasi   = 4;
 
@@ -174,7 +189,6 @@ class AdminController extends Controller
                 'aktif_sampai' => $aktif_sampai,
             ];
         }
-
         $angkatan        = $nowYear;
         $durasi          = 40;
         $aktifSampaiYear = $angkatan + $durasi;
@@ -190,43 +204,25 @@ class AdminController extends Controller
     public function verifikasiUser()
     {
         Auth::requireRole(['admin', 'super_admin']);
-
-        $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-        if ($page < 1) $page = 1;
-
-        $mode   = $_GET['mode'] ?? null;
-        $filter = '';
-        $search = '';
-
-        if ($mode === 'filter') {
-            $filter = $_GET['filter'] ?? '';
-        } elseif ($mode === 'search') {
-            $search = $_GET['q'] ?? '';
-        } else {
-            $filter = 'pending';
-        }
-
-        $data = $this->registrasiModel->getPendingUsers($page, $filter, $search);
-
+        $page    = max(1, (int)($_GET['page'] ?? 1));
+        $perPage = self::PER_PAGE;
+        $filter = $_GET['filter'] ?? 'pending';
+        $search = trim($_GET['q'] ?? '');
+        $data = $this->registrasiModel->getPendingUsers($page, $filter, $search, $perPage);
         $this->view('admin/verifikasiuser', $data);
     }
+
 
     public function ruangan()
     {
         Auth::requireRole(['admin', 'super_admin']);
-
-        $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-        if ($page < 1) $page = 1;
-
-        $search = $_GET['q'] ?? '';
-        $status = $_GET['status'] ?? 'all';
-
-        $perPage = 20;
+        $page   = max(1, (int)($_GET['page'] ?? 1));
+        $perPage = self::PER_PAGE;
         $offset  = ($page - 1) * $perPage;
-
+        $search = trim($_GET['q'] ?? '');
+        $status = $_GET['status'] ?? 'all';
         $result    = $this->roomModel->getAdminList($perPage, $offset, $search, $status);
         $anyActive = $this->roomModel->anyActive();
-
         $this->view('admin/kelolaruangan', [
             'rooms'        => $result['data'],
             'current_page' => $page,
@@ -241,17 +237,11 @@ class AdminController extends Controller
     {
         Auth::requireRole(['admin', 'super_admin']);
 
-        $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-        if ($page < 1) $page = 1;
-
-        // filter role: all | mahasiswa | dosen | tendik
+        $page   = max(1, (int)($_GET['page'] ?? 1));
+        $perPage = self::PER_PAGE;
         $filter = $_GET['filter'] ?? 'all';
         $search = trim($_GET['q'] ?? '');
-
-        $perPage = 5; // boleh kamu ganti kalau mau
-
-        $accountModel = new Account();
-        $result = $accountModel->getAdminUserList($page, $perPage, $filter, $search);
+        $result = $this->accountModel->getAdminUserList($page, $perPage, $filter, $search);
 
         $this->view('admin/kelolaanggota', [
             'users'       => $result['data'],
@@ -262,29 +252,44 @@ class AdminController extends Controller
         ]);
     }
 
-
-
-
-
     public function laporan()
     {
         Auth::requireRole(['admin', 'super_admin']);
 
         $range = $_GET['range'] ?? 'month';
+        $perPage = 5;
 
-        $rooms   = $this->laporanModel->getRuangan($range);
-        $prodi   = $this->laporanModel->getProdi($range);
-        $jurusan = $this->laporanModel->getJurusan($range);
-        $rating  = $this->laporanModel->getRating($range);
+        $roomsPage   = max(1, (int)($_GET['rooms_page'] ?? 1));
+        $prodiPage   = max(1, (int)($_GET['prodi_page'] ?? 1));
+        $jurusanPage = max(1, (int)($_GET['jurusan_page'] ?? 1));
+        $ratingPage  = max(1, (int)($_GET['rating_page'] ?? 1));
+
+        $rooms   = $this->laporanModel->getRuanganPaged($range, $roomsPage, $perPage);
+        $prodi   = $this->laporanModel->getProdiPaged($range, $prodiPage, $perPage);
+        $jurusan = $this->laporanModel->getJurusanPaged($range, $jurusanPage, $perPage);
+        $rating  = $this->laporanModel->getRatingPaged($range, $ratingPage, $perPage);
 
         $this->view('admin/laporan', [
-            'range'           => $range,
-            'summary_rooms'   => $rooms,
-            'summary_prodi'   => $prodi,
-            'summary_jurusan' => $jurusan,
-            'summary_rating'  => $rating,
+            'range' => $range,
+
+            'summary_rooms'   => $rooms['rows'],
+            'rooms_page'      => $rooms['current_page'],
+            'rooms_total_pages' => $rooms['total_pages'],
+
+            'summary_prodi'   => $prodi['rows'],
+            'prodi_page'      => $prodi['current_page'],
+            'prodi_total_pages' => $prodi['total_pages'],
+
+            'summary_jurusan' => $jurusan['rows'],
+            'jurusan_page'    => $jurusan['current_page'],
+            'jurusan_total_pages' => $jurusan['total_pages'],
+
+            'summary_rating'  => $rating['rows'],
+            'rating_page'     => $rating['current_page'],
+            'rating_total_pages' => $rating['total_pages'],
         ]);
     }
+
 
     public function editUser()
     {
@@ -540,16 +545,33 @@ class AdminController extends Controller
     public function toggleAllRooms()
     {
         Auth::requireRole(['admin', 'super_admin']);
-
-        // Kalau saat ini masih ada ruangan aktif → tombol berarti "OFF"
         if ($this->roomModel->anyActive()) {
             $today = date('Y-m-d');
-
-            // Batalkan semua booking pada hari ini
-            $count = $this->bookingModel->cancelBookingsByDate($today);
-
-            // Nonaktifkan semua ruangan
+            $cancelled = $this->bookingModel->cancelBookingsByDate($today);
             $this->roomModel->setAllStatus('nonaktif');
+
+            foreach ($cancelled as $b) {
+                if (empty($b['email'])) continue;
+
+                $toEmail = (string)$b['email'];
+                $toName  = (string)($b['nama'] ?? 'User');
+
+                $start = !empty($b['start_time']) ? strtotime($b['start_time']) : null;
+                $end   = !empty($b['end_time']) ? strtotime($b['end_time']) : null;
+
+                // ini pakai template yang paling dekat: room_disabled_cancel
+                $this->sendNotif('room_disabled_cancel', $toEmail, $toName, [
+                    'nama_ruangan' => $b['nama_ruangan'] ?? '',
+                    'tanggal'      => $start ? date('Y-m-d', $start) : $today,
+                    'jam_mulai'    => $start ? date('H:i', $start) : '',
+                    'jam_selesai'  => $end ? date('H:i', $end) : '',
+                    'kode_booking' => $b['booking_code'] ?? '',
+                    'catatan_admin' => 'Dibatalkan karena penutupan perpustakaan.',
+                ]);
+            }
+
+            $count = count($cancelled);
+
 
             $this->redirectWithMessage(
                 'index.php?controller=admin&action=ruangan',
@@ -558,10 +580,7 @@ class AdminController extends Controller
             );
             return;
         }
-
-        // Kalau semua ruangan sedang nonaktif → tombol berarti "ON"
         $this->roomModel->setAllStatus('aktif');
-
         $this->redirectWithMessage(
             'index.php?controller=admin&action=ruangan',
             'Semua ruangan telah diaktifkan.',
@@ -676,7 +695,6 @@ class AdminController extends Controller
             ]);
         };
 
-        // VALIDASI
         if ($namaRuangan === '' || $lokasi === '') {
             $renderBack('Nama ruangan dan lokasi wajib diisi.');
             return;
@@ -686,8 +704,6 @@ class AdminController extends Controller
             $renderBack('Kapasitas minimum dan maksimum harus lebih dari 0 dan Kapasitas Min ≤ Kapasitas Max.');
             return;
         }
-
-        // HANDLE FOTO (opsional)
         $fotoPath = $existingRoom['foto_ruangan'] ?? null;
 
         if (!empty($_FILES['foto_ruangan']['name'])) {
@@ -723,8 +739,6 @@ class AdminController extends Controller
                 return;
             }
         }
-
-        // UPDATE TABEL ruangan
         $updateData = [
             'nama_ruangan'       => $namaRuangan,
             'lokasi'             => $lokasi,
@@ -740,8 +754,6 @@ class AdminController extends Controller
             $renderBack('Gagal memperbarui ruangan. Silakan coba lagi.');
             return;
         }
-
-        // SYNC FASILITAS
         $this->roomModel->syncFacilities($idRuangan, $selectedFacilities);
 
         $this->redirectWithMessage(
@@ -1007,8 +1019,6 @@ class AdminController extends Controller
     public function tambahAnggota()
     {
         Auth::requireRole(['admin', 'super_admin']);
-
-        // === REQUEST GET → tampilkan form ===
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->view('admin/tambahanggota', [
                 'error' => null,
@@ -1024,8 +1034,6 @@ class AdminController extends Controller
             ]);
             return;
         }
-
-        // === REQUEST POST → proses simpan ===
         $nama         = trim($this->input('nama'));
         $email        = trim($this->input('email'));
         $nimNip       = trim($this->input('nim_nip'));
@@ -1045,8 +1053,6 @@ class AdminController extends Controller
             'unit_jurusan'  => $unitJurusan,
             'status_aktif'  => $statusAktif,
         ];
-
-        // ===== VALIDASI DASAR =====
         if ($nama === '' || $email === '' || $nimNip === '' || $role === '') {
             $this->view('admin/tambahanggota', [
                 'error' => 'Nama, email, NIP/NIM, dan role wajib diisi.',
@@ -1070,8 +1076,6 @@ class AdminController extends Controller
             ]);
             return;
         }
-
-        // Dosen wajib jurusan, tendik wajib unit_jurusan
         if ($role === 'dosen' && $jurusan === '') {
             $this->view('admin/tambahanggota', [
                 'error' => 'Jurusan wajib diisi untuk dosen.',
@@ -1087,8 +1091,6 @@ class AdminController extends Controller
             ]);
             return;
         }
-
-        // Password
         if ($password === '' || $password2 === '') {
             $this->view('admin/tambahanggota', [
                 'error' => 'Password dan konfirmasi password wajib diisi.',
@@ -1116,8 +1118,6 @@ class AdminController extends Controller
             ]);
             return;
         }
-
-        // Cek email / nim_nip sudah dipakai belum (opsional tapi bagus)
         if ($this->accountModel->existsByEmail($email)) {
             $this->view('admin/tambahanggota', [
                 'error' => 'Email sudah terdaftar pada akun lain.',
@@ -1133,19 +1133,11 @@ class AdminController extends Controller
             ]);
             return;
         }
-
-        // Hash password (samakan dengan tempat lain di proyekmu)
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-
-        // Hitung angkatan / aktif_sampai pakai helper yg sudah ada
         $academic = $this->deriveAcademicData(
             ['nim_nip' => $nimNip],
             $role
         );
-
-        // SIMPAN KE TABEL ACCOUNT
-        // Di sini aku anggap kamu punya method createManual di Account,
-        // atau kamu bisa sesuaikan dengan method insert yang sudah ada.
         $this->accountModel->createManual([
             'nama'             => $nama,
             'email'            => $email,

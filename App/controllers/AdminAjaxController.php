@@ -30,6 +30,13 @@ class AdminAjaxController extends Controller
         $tanggal   = $this->input('tanggal');
 
         // Validasi awal
+        if ($this->isWeekend($tanggal)) {
+            return $this->jsonResponse([
+                'success' => true,
+                'slots'   => [],
+                'message' => 'Peminjaman tidak tersedia pada Sabtu/Minggu. Pilih hari kerja (Senin–Jumat).',
+            ]);
+        }
         if (
             !$idRuangan ||
             !$tanggal ||

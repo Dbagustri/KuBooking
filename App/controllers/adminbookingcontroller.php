@@ -4,12 +4,14 @@ namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Core\Auth;
+use App\Core\NotificationService;
 use App\Models\BookingAdmin;
 use App\Models\BookingReschedule;
 use App\Models\Room;
 use App\Models\AccountSuspend;
 use App\Models\Account;
 use App\Models\BookingUser;
+
 
 class AdminBookingController extends Controller
 {
@@ -25,6 +27,8 @@ class AdminBookingController extends Controller
     private $accountModel;
     /** @var BookingUser */
     private $bookingUserModel;
+    /** @var NotificationService */
+    private $notif;
 
     public function __construct()
     {
@@ -34,13 +38,64 @@ class AdminBookingController extends Controller
         $this->accountSuspendModel    = new AccountSuspend();
         $this->accountModel           = new Account();
         $this->bookingUserModel       = new BookingUser();
+        $this->notif = new NotificationService();
     }
+    private function sendNotifToUserById(int $userId, string $jenis, array $data = []): bool
+    {
+        $user = $this->accountModel->findById($userId);
+
+        if (!$user) {
+            error_log("[NOTIF] User not found. userId={$userId}, jenis={$jenis}");
+            return false;
+        }
+
+        $toEmail = (string)($user['email'] ?? '');
+        $toName  = (string)($user['nama'] ?? 'User');
+
+        if ($toEmail === '' || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
+            error_log("[NOTIF] Email invalid/empty. userId={$userId}, jenis={$jenis}, email={$toEmail}");
+            return false;
+        }
+
+        // pastikan template punya {{nama}}
+        $data = array_merge(['nama' => $toName], $data);
+
+        $ok = $this->notif->sendByJenis($jenis, $toEmail, $toName, $data);
+
+        if (!$ok) {
+            error_log("[NOTIF] Send failed. userId={$userId}, jenis={$jenis}, email={$toEmail}");
+        }
+
+        return $ok;
+    }
+
+
 
     public function manage()
     {
         Auth::requireRole(['admin', 'super_admin']);
 
-        $this->bookingAdminModel->autoCancelLateBookings();
+        $cancelled = $this->bookingAdminModel->autoCancelLateBookings();
+
+        foreach ($cancelled as $b) {
+            // kirim ke PJ kalau ada email
+            if (!empty($b['id_pj']) && !empty($b['email'])) {
+                $toEmail = (string)$b['email'];
+                $toName  = (string)($b['nama'] ?? 'User');
+
+                $start = !empty($b['start_time']) ? strtotime($b['start_time']) : null;
+                $end   = !empty($b['end_time']) ? strtotime($b['end_time']) : null;
+
+                $this->notif->sendByJenis('booking_auto_cancel', $toEmail, $toName, [
+                    'nama'        => $toName,
+                    'nama_ruangan' => $b['nama_ruangan'] ?? '',
+                    'tanggal'     => $start ? date('Y-m-d', $start) : '',
+                    'jam_mulai'   => $start ? date('H:i', $start) : '',
+                    'jam_selesai' => $end ? date('H:i', $end) : '',
+                    'kode_booking' => $b['booking_code'] ?? '',
+                ]);
+            }
+        }
 
         $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
         if ($page < 1) $page = 1;
@@ -48,16 +103,47 @@ class AdminBookingController extends Controller
         $limit  = 5;
         $offset = ($page - 1) * $limit;
 
-        $totalRows  = $this->bookingAdminModel->countAllForAdmin();
+        $status = $_GET['status'] ?? 'all';
+        $q      = trim($_GET['q'] ?? '');
+        $tipe   = $_GET['tipe'] ?? 'internal';
+
+        $allowedStatus = [
+            'all',
+            'pending',
+            'approved',
+            'rejected',
+            'ongoing',
+            'selesai',
+            'completed',
+            'cancelled',
+            'reschedule_pending',
+            'reschedule_approved',
+            'reschedule_rejected',
+        ];
+        if (!in_array($status, $allowedStatus, true)) $status = 'all';
+        if (!in_array($tipe, ['all', 'internal', 'external'], true)) $tipe = 'internal';
+
+        $totalRows  = $this->bookingAdminModel->countForAdmin($status, $q, $tipe);
         $totalPages = $totalRows > 0 ? (int)ceil($totalRows / $limit) : 1;
-        $bookings   = $this->bookingAdminModel->getAllForAdmin($limit, $offset);
+
+        if ($page > $totalPages) {
+            $page = $totalPages;
+            $offset = ($page - 1) * $limit;
+        }
+
+        $bookings = $this->bookingAdminModel->getForAdmin($limit, $offset, $status, $q, $tipe);
 
         $this->view('admin/kelolabooking', [
-            'bookings'    => $bookings,
-            'currentPage' => $page,
-            'totalPages'  => $totalPages,
+            'bookings'     => $bookings,
+            'currentPage'  => $page,
+            'totalPages'   => $totalPages,
+            'statusFilter' => $status,
+            'search'       => $q,
+            'typeFilter'   => $tipe,
         ]);
     }
+
+
 
     public function detail()
     {
@@ -110,6 +196,14 @@ class AdminBookingController extends Controller
         $keperluan  = $this->input('keperluan');
         $members    = $_POST['members'] ?? [];
         $pjIdInput  = $this->input('pj_id_user');
+        // ❌ Blok Sabtu/Minggu
+        if ($this->isWeekend($tanggal)) {
+            return $this->redirectWithMessage(
+                'index.php?controller=adminBooking&action=createInternal',
+                'Peminjaman tidak tersedia pada Sabtu/Minggu. Pilih hari kerja (Senin–Jumat).',
+                'error'
+            );
+        }
 
         // ====== VALIDASI DASAR ======
         if (
@@ -293,6 +387,14 @@ class AdminBookingController extends Controller
             $guestEmail    = $this->input('guest_email') ?: $this->input('email_peminjam');
             $guestPhone    = $this->input('guest_phone') ?: $this->input('no_hp');
             $asalInstansi  = $this->input('asal_instansi');
+
+            if ($this->isWeekend($tanggal)) {
+                return $this->redirectWithMessage(
+                    'index.php?controller=adminBooking&action=createExternal',
+                    $this->weekendMessage(),
+                    'error'
+                );
+            }
 
             if (
                 !$idRuangan ||
@@ -538,6 +640,13 @@ class AdminBookingController extends Controller
         if ($durasi > 3) {
             $durasi = 3;
         }
+        if ($this->isWeekend($tanggal)) {
+            return $this->redirectWithMessage(
+                "index.php?controller=adminBooking&action=edit&id={$id}",
+                $this->weekendMessage(),
+                'error'
+            );
+        }
 
         $keperluan = $keperluan !== null ? $keperluan : ($booking['keperluan'] ?? '');
 
@@ -649,6 +758,20 @@ class AdminBookingController extends Controller
         }
 
         $this->bookingAdminModel->addStatus($idBooking, 'approved');
+        // Ambil data booking untuk isi template
+        $booking = $this->bookingAdminModel->findWithRoom($idBooking);
+        if ($booking && !empty($booking['id_pj'])) {
+            $start = isset($booking['start_time']) ? strtotime($booking['start_time']) : null;
+            $end   = isset($booking['end_time']) ? strtotime($booking['end_time']) : null;
+
+            $this->sendNotifToUserById((int)$booking['id_pj'], 'booking_approved', [
+                'nama_ruangan'  => $booking['nama_ruangan'] ?? '',
+                'tanggal'       => $start ? date('Y-m-d', $start) : ($booking['tanggal'] ?? ''),
+                'jam_mulai'     => $start ? date('H:i', $start) : '',
+                'jam_selesai'   => $end ? date('H:i', $end) : '',
+                'kode_booking'  => $booking['booking_code'] ?? '',
+            ]);
+        }
 
         return $this->redirectWithMessage(
             'index.php?controller=adminBooking&action=manage',
@@ -683,6 +806,20 @@ class AdminBookingController extends Controller
         }
 
         $this->bookingAdminModel->addStatus($idBooking, 'rejected', $alasan ?: null);
+        $booking = $this->bookingAdminModel->findWithRoom($idBooking);
+        if ($booking && !empty($booking['id_pj'])) {
+            $start = isset($booking['start_time']) ? strtotime($booking['start_time']) : null;
+            $end   = isset($booking['end_time']) ? strtotime($booking['end_time']) : null;
+
+            $this->sendNotifToUserById((int)$booking['id_pj'], 'booking_rejected', [
+                'nama_ruangan' => $booking['nama_ruangan'] ?? '',
+                'tanggal'      => $start ? date('Y-m-d', $start) : ($booking['tanggal'] ?? ''),
+                'jam_mulai'    => $start ? date('H:i', $start) : '',
+                'jam_selesai'  => $end ? date('H:i', $end) : '',
+                'kode_booking' => $booking['booking_code'] ?? '',
+                'alasan'       => $alasan ?: 'Tidak ada keterangan.',
+            ]);
+        }
 
         return $this->redirectWithMessage(
             'index.php?controller=adminBooking&action=manage',
@@ -884,32 +1021,64 @@ class AdminBookingController extends Controller
         Auth::requireRole(['admin', 'super_admin']);
 
         $idReschedule = (int)($this->input('id_reschedule') ?? 0);
-        if (!$idReschedule) {
-            $this->redirectWithMessage(
+        if ($idReschedule <= 0) {
+            return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=manage',
                 'Data reschedule tidak valid.',
                 'error'
             );
-            return;
         }
 
         $result = $this->bookingAdminModel->approveReschedule($idReschedule);
 
         if (empty($result['success'])) {
-            $this->redirectWithMessage(
+            return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=manage',
                 $result['message'] ?? 'Gagal menyetujui reschedule.',
                 'error'
             );
-            return;
         }
 
-        $idBooking = $result['id_booking'] ?? null;
-        $targetUrl = $idBooking
-            ? 'index.php?controller=adminBooking&action=detail&id=' . (int)$idBooking
+        $idBooking = (int)($result['id_booking'] ?? $result['id_bookings'] ?? $result['booking_id'] ?? 0);
+
+        if ($idBooking > 0) {
+            $booking = $this->bookingAdminModel->findWithRoom($idBooking);
+
+            if (!$booking) {
+                error_log("[NOTIF] reschedule_approved: booking not found. idBooking={$idBooking}");
+            } else {
+                // fallback kalau key beda
+                $idPj = (int)($booking['id_pj'] ?? $booking['pj_id_user'] ?? $booking['id_user_pj'] ?? 0);
+
+                if ($idPj <= 0) {
+                    error_log("[NOTIF] reschedule_approved: id_pj empty. idBooking={$idBooking}. keys=" . implode(',', array_keys($booking)));
+                } else {
+                    $start = !empty($booking['start_time']) ? strtotime($booking['start_time']) : null;
+                    $end   = !empty($booking['end_time']) ? strtotime($booking['end_time']) : null;
+
+                    $sent = $this->sendNotifToUserById($idPj, 'reschedule_approved', [
+                        'nama_ruangan'     => $booking['nama_ruangan'] ?? '',
+                        'tanggal_baru'     => $start ? date('Y-m-d', $start) : ($booking['tanggal'] ?? ''),
+                        'jam_mulai_baru'   => $start ? date('H:i', $start) : '',
+                        'jam_selesai_baru' => $end ? date('H:i', $end) : '',
+                        'kode_booking'     => $booking['booking_code'] ?? '',
+                    ]);
+
+                    if ($sent === false) {
+                        error_log("[NOTIF] reschedule_approved: send failed. idBooking={$idBooking}, id_pj={$idPj}");
+                    }
+                }
+            }
+        } else {
+            error_log("[NOTIF] reschedule_approved: idBooking missing from result keys=" . implode(',', array_keys((array)$result)));
+        }
+
+
+        $targetUrl = $idBooking > 0
+            ? 'index.php?controller=adminBooking&action=detail&id=' . $idBooking
             : 'index.php?controller=adminBooking&action=manage';
 
-        $this->redirectWithMessage(
+        return $this->redirectWithMessage(
             $targetUrl,
             'Reschedule berhasil disetujui. Jadwal booking utama telah diperbarui.',
             'success'
@@ -921,34 +1090,63 @@ class AdminBookingController extends Controller
         Auth::requireRole(['admin', 'super_admin']);
 
         $idReschedule = (int)($this->input('id_reschedule') ?? 0);
-        $alasan       = $this->input('alasan_reject') ?? null;
+        $alasan       = trim((string)($this->input('alasan_reject') ?? ''));
 
-        if (!$idReschedule) {
-            $this->redirectWithMessage(
+        if ($idReschedule <= 0) {
+            return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=manage',
                 'Data reschedule tidak valid.',
                 'error'
             );
-            return;
         }
 
-        $result = $this->bookingAdminModel->rejectReschedule($idReschedule, $alasan);
+        $result = $this->bookingAdminModel->rejectReschedule($idReschedule, $alasan ?: null);
 
         if (empty($result['success'])) {
-            $this->redirectWithMessage(
+            return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=manage',
                 $result['message'] ?? 'Gagal menolak reschedule.',
                 'error'
             );
-            return;
         }
 
-        $idBooking = $result['id_booking'] ?? null;
-        $targetUrl = $idBooking
-            ? 'index.php?controller=adminBooking&action=detail&id=' . (int)$idBooking
+        $idBooking = (int)($result['id_booking'] ?? 0);
+
+        // ===== NOTIF (tidak mengganggu flow utama) =====
+        if ($idBooking > 0) {
+            $booking = $this->bookingAdminModel->findWithRoom($idBooking);
+
+            if (!$booking) {
+                error_log("[NOTIF] reschedule_rejected: booking not found. idBooking={$idBooking}");
+            } else {
+                $idPj = (int)($booking['id_pj'] ?? 0);
+                if ($idPj <= 0) {
+                    error_log("[NOTIF] reschedule_rejected: id_pj empty. idBooking={$idBooking}");
+                } else {
+                    $start = !empty($booking['start_time']) ? strtotime($booking['start_time']) : null;
+                    $end   = !empty($booking['end_time']) ? strtotime($booking['end_time']) : null;
+
+                    $sent = $this->sendNotifToUserById($idPj, 'reschedule_rejected', [
+                        'nama_ruangan'     => $booking['nama_ruangan'] ?? '',
+                        'tanggal_lama'     => $start ? date('Y-m-d', $start) : '',
+                        'jam_mulai_lama'   => $start ? date('H:i', $start) : '',
+                        'jam_selesai_lama' => $end ? date('H:i', $end) : '',
+                        'kode_booking'     => $booking['booking_code'] ?? '',
+                        'alasan'           => $alasan !== '' ? $alasan : 'Tidak ada keterangan.',
+                    ]);
+
+                    if ($sent === false) {
+                        error_log("[NOTIF] reschedule_rejected: send failed. idBooking={$idBooking}, id_pj={$idPj}");
+                    }
+                }
+            }
+        }
+
+        $targetUrl = $idBooking > 0
+            ? 'index.php?controller=adminBooking&action=detail&id=' . $idBooking
             : 'index.php?controller=adminBooking&action=manage';
 
-        $this->redirectWithMessage(
+        return $this->redirectWithMessage(
             $targetUrl,
             'Reschedule ditolak.',
             'success'

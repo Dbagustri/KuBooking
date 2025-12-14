@@ -21,21 +21,37 @@
     // ==========================
     // DATA DARI CONTROLLER
     // ==========================
-    $range          = $range ?? 'month';
+    $range = $range ?? ($_GET['range'] ?? 'month');
 
     $roomsRaw       = $summary_rooms   ?? [];
     $prodiRaw       = $summary_prodi   ?? [];
     $jurusanRaw     = $summary_jurusan ?? [];
     $ratingSummary  = $summary_rating  ?? [];
 
+    // pagination state per section
+    $roomsPage   = (int)($rooms_page ?? ($_GET['rooms_page'] ?? 1));
+    $roomsTotal  = (int)($rooms_total_pages ?? 1);
+
+    $prodiPage   = (int)($prodi_page ?? ($_GET['prodi_page'] ?? 1));
+    $prodiTotal  = (int)($prodi_total_pages ?? 1);
+
+    $jurusanPage = (int)($jurusan_page ?? ($_GET['jurusan_page'] ?? 1));
+    $jurusanTotal = (int)($jurusan_total_pages ?? 1);
+
+    $ratingPage  = (int)($rating_page ?? ($_GET['rating_page'] ?? 1));
+    $ratingTotal = (int)($rating_total_pages ?? 1);
+
+    if ($roomsPage < 1) $roomsPage = 1;
+    if ($prodiPage < 1) $prodiPage = 1;
+    if ($jurusanPage < 1) $jurusanPage = 1;
+    if ($ratingPage < 1) $ratingPage = 1;
+
     /**
-     * Helper pivot: 
-     *  - $rows: array data mentah
-     *  - $keyDate: nama kolom tanggal (string)
-     *  - $keyCat: nama kolom kategori (ruangan/prodi/jurusan)
-     *  - $keyTotal: nama kolom total
-     * Return:
-     *  - ['dates' => [...], 'categories' => [...], 'data' => [tanggal => [kategori => total]]]
+     * Helper pivot:
+     * - $rows: array data mentah
+     * - $keyDate: nama kolom tanggal
+     * - $keyCat: nama kolom kategori (ruangan/prodi/jurusan)
+     * - $keyTotal: nama kolom total
      */
     function pivotByCategory(array $rows, string $keyDate, string $keyCat, string $keyTotal): array
     {
@@ -48,20 +64,12 @@
             $cat = $row[$keyCat] ?? null;
             $tot = (int)($row[$keyTotal] ?? 0);
 
-            if (!$tgl || !$cat) {
-                continue;
-            }
+            if (!$tgl || !$cat) continue;
 
-            if (!in_array($tgl, $dates, true)) {
-                $dates[] = $tgl;
-            }
-            if (!in_array($cat, $categories, true)) {
-                $categories[] = $cat;
-            }
+            if (!in_array($tgl, $dates, true)) $dates[] = $tgl;
+            if (!in_array($cat, $categories, true)) $categories[] = $cat;
 
-            if (!isset($data[$tgl])) {
-                $data[$tgl] = [];
-            }
+            if (!isset($data[$tgl])) $data[$tgl] = [];
             $data[$tgl][$cat] = $tot;
         }
 
@@ -75,10 +83,16 @@
         ];
     }
 
-    // Pivot untuk masing-masing laporan
     $pivotRuangan = pivotByCategory($roomsRaw,   'tanggal', 'nama_ruangan', 'total');
     $pivotProdi   = pivotByCategory($prodiRaw,   'tanggal', 'prodi',        'total');
     $pivotJurusan = pivotByCategory($jurusanRaw, 'tanggal', 'jurusan',      'total');
+
+    $ranges = [
+        'week'   => '1 Minggu',
+        'month'  => '1 Bulan',
+        '3month' => '3 Bulan',
+        '6month' => '6 Bulan',
+    ];
     ?>
 
     <!-- KONTEN -->
@@ -89,6 +103,7 @@
             include $flashPath;
         }
         ?>
+
         <!-- NAVBAR -->
         <div class="m-4">
             <?php
@@ -104,27 +119,21 @@
 
             <!-- FILTER RANGE -->
             <div class="flex flex-wrap gap-2">
-                <?php
-                $ranges = [
-                    'week'   => '1 Minggu',
-                    'month'  => '1 Bulan',
-                    '3month' => '3 Bulan',
-                    '6month' => '6 Bulan',
-                ];
-                ?>
-
                 <?php foreach ($ranges as $key => $label): ?>
-                    <a href="index.php?controller=admin&action=laporan&range=<?= $key ?>"
+                    <a href="index.php?controller=admin&action=laporan&range=<?= $key ?>
+                        &rooms_page=1&prodi_page=1&jurusan_page=1&rating_page=1"
                         class="px-4 py-2 rounded-lg text-sm font-medium border 
-                               <?= $range === $key ? 'bg-[#1e3a5f] text-white border-[#1e3a5f]' : 'bg-white text-gray-700 border-gray-300' ?>
-                               hover:bg-[#163052] hover:text-white transition">
+                        <?= $range === $key
+                            ? 'bg-[#1e3a5f] text-white border-[#1e3a5f]'
+                            : 'bg-white text-gray-700 border-gray-300' ?>
+                        hover:bg-[#163052] hover:text-white transition">
                         <?= $label ?>
                     </a>
                 <?php endforeach; ?>
             </div>
 
             <!-- ====================================================== -->
-            <!-- 1. LAPORAN RUANGAN TERBANYAK (PIVOT) -->
+            <!-- 1) RUANGAN TERBANYAK (PIVOT) -->
             <!-- ====================================================== -->
             <div class="bg-white shadow rounded-xl p-6 space-y-4">
                 <div class="flex items-center justify-between">
@@ -132,10 +141,12 @@
                         Laporan Ruangan Terbanyak (per Tanggal)
                     </h2>
 
-                    <button class="px-4 py-1.5 bg-[#1e3a5f] text-white rounded-lg text-sm hover:bg-[#163052]">
+                    <a href="index.php?controller=eksport&action=laporan&type=rooms&range=<?= urlencode($range) ?>"
+                        class="px-4 py-1.5 bg-[#1e3a5f] text-white rounded-lg text-sm hover:bg-[#163052] transition">
                         Export
-                    </button>
+                    </a>
                 </div>
+
 
                 <div class="overflow-x-auto">
                     <?php if (!empty($pivotRuangan['dates']) && !empty($pivotRuangan['categories'])): ?>
@@ -155,7 +166,7 @@
                                 <?php foreach ($pivotRuangan['dates'] as $tgl): ?>
                                     <?php
                                     $rowData = $pivotRuangan['data'][$tgl] ?? [];
-                                    $sum     = 0;
+                                    $sum = 0;
                                     ?>
                                     <tr class="border-b <?= (strtotime($tgl) % 2) ? 'bg-gray-50' : 'bg-white' ?>">
                                         <td class="px-3 py-2 whitespace-nowrap">
@@ -185,10 +196,28 @@
                         </p>
                     <?php endif; ?>
                 </div>
+
+                <!-- PAGINATION RUANGAN -->
+                <?php
+                $pagination = [
+                    'pageKey'     => 'rooms_page',
+                    'currentPage' => (int)$roomsPage,
+                    'totalPages'  => (int)$roomsTotal,
+                    'params'      => [
+                        'controller'   => 'admin',
+                        'action'       => 'laporan',
+                        'range'        => $range,
+                        'prodi_page'   => (int)$prodiPage,
+                        'jurusan_page' => (int)$jurusanPage,
+                        'rating_page'  => (int)$ratingPage,
+                    ],
+                ];
+                include __DIR__ . '/../layout/pagination.php';
+                ?>
             </div>
 
             <!-- ====================================================== -->
-            <!-- 2. LAPORAN BERDASARKAN PRODI (PIVOT) -->
+            <!-- 2) PRODI (PIVOT) -->
             <!-- ====================================================== -->
             <div class="bg-white shadow rounded-xl p-6 space-y-4">
                 <div class="flex items-center justify-between">
@@ -196,9 +225,10 @@
                         Laporan Berdasarkan Prodi (per Tanggal)
                     </h2>
 
-                    <button class="px-4 py-1.5 bg-[#1e3a5f] text-white rounded-lg text-sm hover:bg-[#163052]">
+                    <a href="index.php?controller=eksport&action=laporan&type=prodi&range=<?= urlencode($range) ?>"
+                        class="px-4 py-1.5 bg-[#1e3a5f] text-white rounded-lg text-sm hover:bg-[#163052] transition">
                         Export
-                    </button>
+                    </a>
                 </div>
 
                 <div class="overflow-x-auto">
@@ -219,7 +249,7 @@
                                 <?php foreach ($pivotProdi['dates'] as $tgl): ?>
                                     <?php
                                     $rowData = $pivotProdi['data'][$tgl] ?? [];
-                                    $sum     = 0;
+                                    $sum = 0;
                                     ?>
                                     <tr class="border-b <?= (strtotime($tgl) % 2) ? 'bg-gray-50' : 'bg-white' ?>">
                                         <td class="px-3 py-2 whitespace-nowrap">
@@ -249,10 +279,28 @@
                         </p>
                     <?php endif; ?>
                 </div>
+
+                <!-- PAGINATION PRODI -->
+                <?php
+                $pagination = [
+                    'pageKey'     => 'prodi_page',
+                    'currentPage' => (int)$prodiPage,
+                    'totalPages'  => (int)$prodiTotal,
+                    'params'      => [
+                        'controller'   => 'admin',
+                        'action'       => 'laporan',
+                        'range'        => $range,
+                        'rooms_page'   => (int)$roomsPage,
+                        'jurusan_page' => (int)$jurusanPage,
+                        'rating_page'  => (int)$ratingPage,
+                    ],
+                ];
+                include __DIR__ . '/../layout/pagination.php';
+                ?>
             </div>
 
             <!-- ====================================================== -->
-            <!-- 3. LAPORAN BERDASARKAN JURUSAN (PIVOT) -->
+            <!-- 3) JURUSAN (PIVOT) -->
             <!-- ====================================================== -->
             <div class="bg-white shadow rounded-xl p-6 space-y-4">
                 <div class="flex items-center justify-between">
@@ -260,9 +308,10 @@
                         Laporan Berdasarkan Jurusan (per Tanggal)
                     </h2>
 
-                    <button class="px-4 py-1.5 bg-[#1e3a5f] text-white rounded-lg text-sm hover:bg-[#163052]">
+                    <a href="index.php?controller=eksport&action=laporan&type=jurusan&range=<?= urlencode($range) ?>"
+                        class="px-4 py-1.5 bg-[#1e3a5f] text-white rounded-lg text-sm hover:bg-[#163052] transition">
                         Export
-                    </button>
+                    </a>
                 </div>
 
                 <div class="overflow-x-auto">
@@ -271,9 +320,9 @@
                             <thead>
                                 <tr class="bg-gray-200 text-gray-800">
                                     <th class="px-3 py-2 text-left">Tanggal</th>
-                                    <?php foreach ($pivotJurusan['categories'] as $jurusan): ?>
+                                    <?php foreach ($pivotJurusan['categories'] as $jur): ?>
                                         <th class="px-3 py-2 text-center">
-                                            <?= htmlspecialchars($jurusan) ?>
+                                            <?= htmlspecialchars($jur) ?>
                                         </th>
                                     <?php endforeach; ?>
                                     <th class="px-3 py-2 text-center">Total</th>
@@ -283,16 +332,16 @@
                                 <?php foreach ($pivotJurusan['dates'] as $tgl): ?>
                                     <?php
                                     $rowData = $pivotJurusan['data'][$tgl] ?? [];
-                                    $sum     = 0;
+                                    $sum = 0;
                                     ?>
                                     <tr class="border-b <?= (strtotime($tgl) % 2) ? 'bg-gray-50' : 'bg-white' ?>">
                                         <td class="px-3 py-2 whitespace-nowrap">
                                             <?= htmlspecialchars($tgl) ?>
                                         </td>
 
-                                        <?php foreach ($pivotJurusan['categories'] as $jurusan): ?>
+                                        <?php foreach ($pivotJurusan['categories'] as $jur): ?>
                                             <?php
-                                            $val = isset($rowData[$jurusan]) ? (int)$rowData[$jurusan] : 0;
+                                            $val = isset($rowData[$jur]) ? (int)$rowData[$jur] : 0;
                                             $sum += $val;
                                             ?>
                                             <td class="px-3 py-2 text-center">
@@ -313,10 +362,28 @@
                         </p>
                     <?php endif; ?>
                 </div>
+
+                <!-- PAGINATION JURUSAN -->
+                <?php
+                $pagination = [
+                    'pageKey'     => 'jurusan_page',
+                    'currentPage' => (int)$jurusanPage,
+                    'totalPages'  => (int)$jurusanTotal,
+                    'params'      => [
+                        'controller'   => 'admin',
+                        'action'       => 'laporan',
+                        'range'        => $range,
+                        'rooms_page'   => (int)$roomsPage,
+                        'prodi_page'   => (int)$prodiPage,
+                        'rating_page'  => (int)$ratingPage,
+                    ],
+                ];
+                include __DIR__ . '/../layout/pagination.php';
+                ?>
             </div>
 
             <!-- ====================================================== -->
-            <!-- 4. LAPORAN RATING RUANGAN (NON-PIVOT) -->
+            <!-- 4) RATING RUANGAN (NON-PIVOT) -->
             <!-- ====================================================== -->
             <div class="bg-white shadow rounded-xl p-6 space-y-4">
                 <div class="flex items-center justify-between">
@@ -324,9 +391,10 @@
                         Laporan Rating Ruangan (Rata-rata di Range Terpilih)
                     </h2>
 
-                    <button class="px-4 py-1.5 bg-[#1e3a5f] text-white rounded-lg text-sm hover:bg-[#163052]">
+                    <a href="index.php?controller=eksport&action=laporan&type=rating&range=<?= urlencode($range) ?>"
+                        class="px-4 py-1.5 bg-[#1e3a5f] text-white rounded-lg text-sm hover:bg-[#163052] transition">
                         Export
-                    </button>
+                    </a>
                 </div>
 
                 <div class="overflow-x-auto">
@@ -361,6 +429,24 @@
                         </p>
                     <?php endif; ?>
                 </div>
+
+                <!-- PAGINATION RATING -->
+                <?php
+                $pagination = [
+                    'pageKey'     => 'rating_page',
+                    'currentPage' => (int)$ratingPage,
+                    'totalPages'  => (int)$ratingTotal,
+                    'params'      => [
+                        'controller'   => 'admin',
+                        'action'       => 'laporan',
+                        'range'        => $range,
+                        'rooms_page'   => (int)$roomsPage,
+                        'prodi_page'   => (int)$prodiPage,
+                        'jurusan_page' => (int)$jurusanPage,
+                    ],
+                ];
+                include __DIR__ . '/../layout/pagination.php';
+                ?>
             </div>
 
         </div>

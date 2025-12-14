@@ -226,7 +226,14 @@ class UserBookingController extends Controller
             );
             return;
         }
-
+        if ($this->isWeekend($tanggal)) {
+            $this->redirectWithMessage(
+                'index.php?controller=userBooking&action=home',
+                'Peminjaman tidak tersedia pada Sabtu/Minggu. Pilih hari kerja (Senin–Jumat).',
+                'error'
+            );
+            return;
+        }
         // Validasi durasi
         if ($durasi < 1 || $durasi > 3) {
             $this->redirectWithMessage(

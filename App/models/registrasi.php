@@ -118,22 +118,26 @@ class Registrasi extends Model
         $row  = $stmt->fetch(PDO::FETCH_ASSOC);
         return (int) ($row['total'] ?? 0);
     }
-    public function getPendingUsers($page, $filter, $search)
+    public function getPendingUsers($page, $filter, $search, $perPage = 5)
     {
-        $limit  = 10;
+        // pastikan aman
+        $page    = max(1, (int)$page);
+        $perPage = max(1, (int)$perPage);
+
+        $limit  = $perPage;
         $offset = ($page - 1) * $limit;
 
         // hanya pending + rejected
         $where  = "WHERE status IN ('pending','rejected')";
         $params = [];
 
-        // kalau filter diisi (pending atau rejected), tambahkan
+        // filter status spesifik (pending / rejected)
         if (in_array($filter, ['pending', 'rejected'], true)) {
             $where .= " AND status = :filter";
             $params[':filter'] = $filter;
         }
 
-        // kalau search diisi, filter nama / email, tapi tetap hanya di pending+rejected
+        // search
         if ($search !== '') {
             $where .= " AND (nama LIKE :search OR email LIKE :search)";
             $params[':search'] = "%{$search}%";
@@ -145,18 +149,17 @@ class Registrasi extends Model
             LIMIT :offset, :limit";
 
         $stmt = self::$db->prepare($sql);
-
         foreach ($params as $key => $val) {
             $stmt->bindValue($key, $val);
         }
-        $stmt->bindValue(':offset', (int)$offset, PDO::PARAM_INT);
-        $stmt->bindValue(':limit',  (int)$limit,  PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->bindValue(':limit',  $limit,  PDO::PARAM_INT);
 
         $stmt->execute();
         $list = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // total rows (pakai where yang sama, tanpa limit)
-        $sqlCount = "SELECT COUNT(*) FROM registrasi {$where}";
+        // total rows
+        $sqlCount  = "SELECT COUNT(*) FROM registrasi {$where}";
         $stmtCount = self::$db->prepare($sqlCount);
         foreach ($params as $key => $val) {
             $stmtCount->bindValue($key, $val);
@@ -167,11 +170,14 @@ class Registrasi extends Model
         return [
             'list'         => $list,
             'current_page' => $page,
-            'total_pages'  => max(1, ceil($count / $limit)),
+            'total_pages'  => max(1, (int)ceil($count / $limit)),
             'filter'       => $filter,
             'search'       => $search,
+            'per_page'     => $limit,
+            'total_rows'   => $count,
         ];
     }
+
 
     public function updatePasswordByNimNip(string $nim_nip, string $hashedPassword): bool
     {

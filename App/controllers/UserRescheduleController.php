@@ -226,6 +226,25 @@ class UserRescheduleController extends Controller
             return;
         }
 
+        // ✅ BLOK SABTU/MINGGU
+        if ($this->isWeekend($tanggalBaru)) {
+            $members       = $bookingModel->getMembers($idBooking);
+            $disabledSlots = $bookingModel->getDisabledSlotsForRoomDateExcept(
+                $idRuangan,
+                $tanggalBaru,
+                $idBooking
+            );
+
+            $this->view('user/reschedule', [
+                'booking'       => $booking,
+                'members'       => $members,
+                'disabledSlots' => $disabledSlots,
+                'reschedule'    => null,
+                'error'         => 'Reschedule tidak tersedia pada Sabtu/Minggu. Pilih hari kerja (Senin–Jumat).',
+            ]);
+            return;
+        }
+
         // Validasi jam & durasi
         if ($durasiBaru < 1 || $durasiBaru > 3 || empty($jamMulaiBaru)) {
             $members       = $bookingModel->getMembers($idBooking);
@@ -266,6 +285,7 @@ class UserRescheduleController extends Controller
             ]);
             return;
         }
+
         if ($bookingModel->isBentrokExcept($idRuangan, $newStart, $newEnd, $idBooking)) {
             $members       = $bookingModel->getMembers($idBooking);
             $disabledSlots = $bookingModel->getDisabledSlotsForRoomDateExcept(
@@ -322,6 +342,7 @@ class UserRescheduleController extends Controller
             'success'
         );
     }
+
 
     public function finalizeReschedule()
     {

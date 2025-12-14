@@ -75,77 +75,67 @@ class Account extends Model
     }
     public function getAdminUserList(
         int $page = 1,
-        int $perPage = 10,
+        int $perPage = 5,
         string $filter = 'all',
         string $search = ''
-    ) {
-        $limit  = $perPage;
-        $offset = ($page - 1) * $limit;
+    ): array {
+        $limit  = max(1, $perPage);
+        $page   = max(1, $page);
 
-        // Sembunyikan admin/super_admin
         $where  = "WHERE role NOT IN ('admin','super_admin')";
         $params = [];
 
-        // FILTER ROLE (mahasiswa / dosen / tendik / all)
         if ($filter !== '' && $filter !== 'all') {
             $where .= " AND role = :filter";
             $params[':filter'] = $filter;
         }
 
-        // SEARCH (nama, email, jurusan, unit, nim/nip)
         if ($search !== '') {
             $where .= " AND (
-            nama         LIKE :search
-            OR email     LIKE :search
-            OR jurusan   LIKE :search
+            nama LIKE :search
+            OR email LIKE :search
+            OR jurusan LIKE :search
             OR unit_jurusan LIKE :search
-            OR nim_nip   LIKE :search
+            OR nim_nip LIKE :search
         )";
             $params[':search'] = "%{$search}%";
         }
 
-        // Hitung total data
+        // COUNT dulu
         $sqlCount  = "SELECT COUNT(*) FROM " . self::$table . " {$where}";
         $stmtCount = self::$db->prepare($sqlCount);
         $stmtCount->execute($params);
         $totalRows  = (int)$stmtCount->fetchColumn();
-        $totalPages = $totalRows > 0 ? (int)ceil($totalRows / $limit) : 1;
+        $totalPages = max(1, (int)ceil($totalRows / $limit));
 
-        // Ambil data pengguna
+        // clamp page biar gak lewat
+        if ($page > $totalPages) $page = $totalPages;
+
+        $offset = ($page - 1) * $limit;
+
         $sql = "SELECT 
-                id_account,
-                nama,
-                nim_nip,
-                email,
-                jurusan,
-                unit_jurusan,
-                prodi,
-                role,
-                status_aktif,
-                screenshot_kubaca
+                id_account, nama, nim_nip, email, jurusan, unit_jurusan,
+                prodi, role, status_aktif, screenshot_kubaca
             FROM " . self::$table . "
             {$where}
             ORDER BY nama ASC
             LIMIT :limit OFFSET :offset";
 
         $stmt = self::$db->prepare($sql);
-        foreach ($params as $k => $v) {
-            $stmt->bindValue($k, $v);
-        }
+        foreach ($params as $k => $v) $stmt->bindValue($k, $v);
         $stmt->bindValue(':limit', $limit, \PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset, \PDO::PARAM_INT);
         $stmt->execute();
 
-        $data = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-
         return [
-            'data'         => $data,
+            'data'         => $stmt->fetchAll(\PDO::FETCH_ASSOC),
             'current_page' => $page,
             'total_pages'  => $totalPages,
             'filter'       => $filter,
             'search'       => $search,
         ];
     }
+
 
 
     public function updateBasicProfile(int $id, array $data): bool

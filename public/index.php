@@ -3,6 +3,7 @@ session_start();
 
 require __DIR__ . '/../app/core/model.php';
 require __DIR__ . '/../app/core/controller.php';
+require __DIR__ . '/../app/core/helper.php';
 require __DIR__ . '/../app/core/auth.php';
 require __DIR__ . '/../app/core/router.php';
 require __DIR__ . '/../app/core/mailer.php';
@@ -18,6 +19,7 @@ require __DIR__ . '/../app/controllers/adminbookingcontroller.php';
 require __DIR__ . '/../app/controllers/infocontroller.php';
 require __DIR__ . '/../app/Controllers/UserFeedbackController.php';
 require __DIR__ . '/../app/Controllers/SuperAdminController.php';
+require __DIR__ . '/../app/Controllers/EksportController.php';
 
 require __DIR__ . '/../app/models/account.php';
 require __DIR__ . '/../app/models/AccountSuspend.php';

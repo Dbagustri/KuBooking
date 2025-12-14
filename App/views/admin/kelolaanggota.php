@@ -11,46 +11,33 @@
 <body class="bg-[#f2f7fc] text-gray-800 flex">
 
     <?php
-    // SIDEBAR
     $sidebarPath = __DIR__ . '/../layout/sidebar.php';
-    if (file_exists($sidebarPath)) {
-        include $sidebarPath;
-    }
+    if (file_exists($sidebarPath)) include $sidebarPath;
     ?>
 
     <div class="flex-1 flex flex-col h-screen overflow-y-auto">
 
         <?php
-        // FLASH MESSAGE
         $flashPath = __DIR__ . '/../layout/flash.php';
-        if (file_exists($flashPath)) {
-            include $flashPath;
-        }
+        if (file_exists($flashPath)) include $flashPath;
         ?>
 
-        <!-- NAVBAR -->
         <div class="m-4">
             <?php
             $navPath = __DIR__ . '/../layout/nav-admin.php';
-            if (file_exists($navPath)) {
-                include $navPath;
-            }
+            if (file_exists($navPath)) include $navPath;
             ?>
         </div>
 
         <?php
-        // Data dari controller
+        // Data dari controller (fallback aman)
         $users       = $users       ?? [];
         $currentPage = isset($currentPage) ? (int)$currentPage : (int)($_GET['page'] ?? 1);
         if ($currentPage < 1) $currentPage = 1;
         $totalPages  = isset($totalPages) ? (int)$totalPages : 1;
-        $filter      = $filter      ?? 'all';
-        $search      = $search      ?? '';
 
-        // Base URL untuk pagination (mirip kelolabooking)
-        $pageBaseUrl = 'index.php?controller=admin&action=anggota'
-            . '&filter=' . urlencode($filter)
-            . '&q=' . urlencode($search);
+        $filter = $filter ?? ($_GET['filter'] ?? 'all');
+        $search = $search ?? (trim($_GET['q'] ?? ''));
         ?>
 
         <div class="px-4 sm:px-8 pb-10 space-y-6 max-w-6xl mx-auto w-full">
@@ -64,45 +51,54 @@
                     </p>
                 </div>
 
-                <!-- Kalau mau, bisa tambahkan tombol "Tambah Anggota" di sini -->
-
                 <a href="index.php?controller=admin&action=tambahAnggota"
                     class="inline-flex items-center px-4 py-2 rounded-lg text-sm font-semibold 
                           bg-[#1e3a5f] text-white hover:bg-[#163152] shadow">
                     Tambah Anggota
                 </a>
-
             </div>
 
             <!-- FILTER & SEARCH -->
-            <form method="get"
-                class="flex flex-col lg:flex-row lg:items-center lg:space-x-4 space-y-3 lg:space-y-0 mt-2">
-                <input type="hidden" name="controller" value="admin">
-                <input type="hidden" name="action" value="anggota">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:space-x-4 space-y-3 lg:space-y-0 mt-2">
 
-                <!-- FILTER ROLE -->
-                <select name="filter"
-                    class="bg-white border border-gray-300 rounded-full px-4 py-2 text-sm shadow w-full lg:w-auto">
-                    <option value="all" <?= $filter === 'all' ? 'selected' : '' ?>>Semua Role</option>
-                    <option value="mahasiswa" <?= $filter === 'mahasiswa' ? 'selected' : '' ?>>Mahasiswa</option>
-                    <option value="dosen" <?= $filter === 'dosen' ? 'selected' : '' ?>>Dosen</option>
-                    <option value="tendik" <?= $filter === 'tendik' ? 'selected' : '' ?>>Tendik</option>
-                </select>
+                <!-- FILTER ROLE (auto submit, tanpa tombol) -->
+                <form id="filterForm" method="get" class="w-full lg:w-auto">
+                    <input type="hidden" name="controller" value="admin">
+                    <input type="hidden" name="action" value="anggota">
+                    <input type="hidden" name="q" value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="hidden" name="page" value="1">
 
-                <!-- SEARCH -->
-                <div class="flex flex-1 items-center bg-white rounded-full px-4 py-2 shadow border border-gray-200">
-                    <input type="text"
-                        name="q"
-                        value="<?= htmlspecialchars($search) ?>"
-                        placeholder="Cari nama, email, NIM/NIP, jurusan, atau unit"
-                        class="flex-1 text-sm bg-transparent focus:outline-none">
-                </div>
+                    <select name="filter"
+                        onchange="document.getElementById('filterForm').submit()"
+                        class="bg-white border border-gray-300 rounded-full px-4 py-2 text-sm shadow w-full lg:w-auto">
+                        <option value="all" <?= $filter === 'all' ? 'selected' : '' ?>>Semua Role</option>
+                        <option value="mahasiswa" <?= $filter === 'mahasiswa' ? 'selected' : '' ?>>Mahasiswa</option>
+                        <option value="dosen" <?= $filter === 'dosen' ? 'selected' : '' ?>>Dosen</option>
+                        <option value="tendik" <?= $filter === 'tendik' ? 'selected' : '' ?>>Tendik</option>
+                    </select>
+                </form>
 
-                <button type="submit"
-                    class="w-10 h-10 rounded-full bg-[#1e3a5f] flex items-center justify-center text-white hover:bg-[#163052] transition">
-                    🔍
-                </button>
-            </form>
+                <!-- SEARCH (butuh tombol submit) -->
+                <form method="get" class="flex flex-1 items-center">
+                    <input type="hidden" name="controller" value="admin">
+                    <input type="hidden" name="action" value="anggota">
+                    <input type="hidden" name="filter" value="<?= htmlspecialchars($filter, ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="hidden" name="page" value="1">
+
+                    <div class="flex flex-1 items-center bg-white rounded-full px-4 py-2 shadow border border-gray-200">
+                        <input type="text"
+                            name="q"
+                            value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>"
+                            placeholder="Cari nama, email, NIM/NIP, jurusan, atau unit"
+                            class="flex-1 text-sm bg-transparent focus:outline-none">
+                    </div>
+
+                    <button type="submit"
+                        class="ml-2 w-10 h-10 rounded-full bg-[#1e3a5f] flex items-center justify-center text-white hover:bg-[#163052] transition">
+                        🔍
+                    </button>
+                </form>
+            </div>
 
             <!-- TABEL ANGGOTA -->
             <div class="mt-4">
@@ -135,7 +131,6 @@
                                         $role        = $u['role']          ?? '-';
                                         $statusAktif = $u['status_aktif']  ?? 'nonaktif';
 
-                                        // Label jurusan/unit
                                         $jurusanText = '-';
                                         if ($role === 'mahasiswa') {
                                             $jurusanText = trim($jurusan . ' - ' . $prodi);
@@ -145,7 +140,6 @@
                                             $jurusanText = $unitJurusan ?: '-';
                                         }
 
-                                        // Badge role
                                         $roleLabel = ucfirst($role);
                                         $roleBadgeClass = 'bg-slate-100 text-slate-700';
                                         if ($role === 'mahasiswa') {
@@ -156,61 +150,41 @@
                                             $roleBadgeClass = 'bg-amber-100 text-amber-800';
                                         }
 
-                                        // Badge status
                                         $statusLabel = ($statusAktif === 'aktif') ? 'Aktif' : ucfirst($statusAktif);
                                         $statusBadgeClass = ($statusAktif === 'aktif')
                                             ? 'bg-green-100 text-green-800'
                                             : 'bg-gray-200 text-gray-700';
 
-                                        // Row striping
                                         $rowBase = ($i % 2 === 0) ? 'bg-gray-50' : 'bg-gray-100';
                                         ?>
                                         <tr class="<?= $rowBase ?> text-gray-800 border-b last:border-b-0 align-top">
-                                            <!-- NAMA -->
                                             <td class="px-4 py-3">
-                                                <div class="flex flex-col gap-0.5">
-                                                    <span class="font-medium text-slate-900">
-                                                        <?= htmlspecialchars($nama) ?>
-                                                    </span>
-                                                </div>
-                                            </td>
-
-                                            <!-- NIM / NIP -->
-                                            <td class="px-4 py-3">
-                                                <span class="text-slate-800">
-                                                    <?= htmlspecialchars($nimnip) ?>
+                                                <span class="font-medium text-slate-900">
+                                                    <?= htmlspecialchars($nama) ?>
                                                 </span>
                                             </td>
 
-                                            <!-- EMAIL -->
-                                            <td class="px-4 py-3">
-                                                <span class="text-slate-800">
-                                                    <?= htmlspecialchars($email) ?>
-                                                </span>
-                                            </td>
+                                            <td class="px-4 py-3"><?= htmlspecialchars($nimnip) ?></td>
+                                            <td class="px-4 py-3"><?= htmlspecialchars($email) ?></td>
 
-                                            <!-- JURUSAN / UNIT -->
                                             <td class="px-4 py-3">
                                                 <span class="text-slate-800 text-xs">
                                                     <?= htmlspecialchars($jurusanText) ?>
                                                 </span>
                                             </td>
 
-                                            <!-- ROLE -->
                                             <td class="px-4 py-3">
                                                 <span class="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold <?= $roleBadgeClass ?>">
                                                     <?= htmlspecialchars($roleLabel) ?>
                                                 </span>
                                             </td>
 
-                                            <!-- STATUS AKUN -->
                                             <td class="px-4 py-3">
                                                 <span class="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold <?= $statusBadgeClass ?>">
                                                     <?= htmlspecialchars($statusLabel) ?>
                                                 </span>
                                             </td>
 
-                                            <!-- AKSI -->
                                             <td class="px-4 py-3 text-center">
                                                 <div class="relative inline-block text-left">
                                                     <button type="button"
@@ -225,22 +199,19 @@
                                                     </button>
 
                                                     <div class="menu-panel hidden origin-top-right absolute right-0 mt-2 w-52 rounded-md shadow-lg
-            bg-white ring-1 ring-black ring-opacity-5 z-50">
+                                                                bg-white ring-1 ring-black ring-opacity-5 z-50">
                                                         <div class="py-1 text-sm text-gray-700">
 
-                                                            <!-- DETAIL -->
                                                             <a href="index.php?controller=admin&action=detailUser&id=<?= $id ?>"
                                                                 class="block px-4 py-2 hover:bg-gray-100">
                                                                 Detail Anggota
                                                             </a>
 
-                                                            <!-- EDIT -->
                                                             <a href="index.php?controller=admin&action=editUser&id=<?= $id ?>"
                                                                 class="block px-4 py-2 hover:bg-gray-100">
                                                                 Edit
                                                             </a>
 
-                                                            <!-- AKTIF / NONAKTIF -->
                                                             <?php if ($statusAktif === 'aktif'): ?>
                                                                 <form action="index.php?controller=admin&action=setUserStatus"
                                                                     method="POST"
@@ -265,7 +236,6 @@
                                                                 </form>
                                                             <?php endif; ?>
 
-                                                            <!-- HAPUS -->
                                                             <form action="index.php?controller=admin&action=deleteUser"
                                                                 method="POST"
                                                                 onsubmit="return confirm('Yakin ingin menghapus akun ini?');">
@@ -298,55 +268,23 @@
                     </div>
                 </div>
 
-                <!-- PAGINATION (persis gaya Kelola Booking) -->
-                <?php if ($totalPages > 1 && !empty($users)): ?>
-                    <div class="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-                        <div class="text-slate-500">
-                            Halaman <span class="font-semibold"><?= $currentPage ?></span> dari
-                            <span class="font-semibold"><?= $totalPages ?></span>
-                        </div>
-
-                        <div class="flex items-center gap-1">
-                            <!-- Prev -->
-                            <?php if ($currentPage > 1): ?>
-                                <a href="<?= $pageBaseUrl ?>&page=<?= $currentPage - 1 ?>"
-                                    class="px-2.5 py-1 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50">
-                                    ‹ Sebelumnya
-                                </a>
-                            <?php else: ?>
-                                <span class="px-2.5 py-1 rounded-lg border border-slate-100 text-slate-300 cursor-not-allowed">
-                                    ‹ Sebelumnya
-                                </span>
-                            <?php endif; ?>
-
-                            <!-- Numbers -->
-                            <?php for ($p = 1; $p <= $totalPages; $p++): ?>
-                                <?php if ($p == $currentPage): ?>
-                                    <span class="px-3 py-1 rounded-lg bg-[#1e3a5f] text-white text-xs font-semibold">
-                                        <?= $p ?>
-                                    </span>
-                                <?php else: ?>
-                                    <a href="<?= $pageBaseUrl ?>&page=<?= $p ?>"
-                                        class="px-3 py-1 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 text-xs">
-                                        <?= $p ?>
-                                    </a>
-                                <?php endif; ?>
-                            <?php endfor; ?>
-
-                            <!-- Next -->
-                            <?php if ($currentPage < $totalPages): ?>
-                                <a href="<?= $pageBaseUrl ?>&page=<?= $currentPage + 1 ?>"
-                                    class="px-2.5 py-1 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50">
-                                    Berikutnya ›
-                                </a>
-                            <?php else: ?>
-                                <span class="px-2.5 py-1 rounded-lg border border-slate-100 text-slate-300 cursor-not-allowed">
-                                    Berikutnya ›
-                                </span>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                <?php endif; ?>
+                <!-- PAGINATION (pakai komponen pagination.php biar seragam) -->
+                <?php
+                if ((int)$totalPages > 1) {
+                    $pagination = [
+                        'pageKey'     => 'page',
+                        'currentPage' => (int)$currentPage,
+                        'totalPages'  => (int)$totalPages,
+                        'params'      => [
+                            'controller' => 'admin',
+                            'action'     => 'anggota',
+                            'filter'     => $filter,
+                            'q'          => $search,
+                        ],
+                    ];
+                    include __DIR__ . '/../layout/pagination.php';
+                }
+                ?>
             </div>
 
         </div>

@@ -16,26 +16,33 @@
     include $sidebarPath;
   }
 
-  // --- LOGIKA HALAMAN & TAB ---
-  // Menangkap tab mana yang sedang aktif dari URL (default: booking)
-  $activeTab = $_GET['tab'] ?? 'booking';
+  // --- DATA DARI CONTROLLER (fallback aman) ---
+  $activeTab = $activeTab ?? ($_GET['tab'] ?? 'booking');
 
-  // Default value untuk pagination (jika controller belum mengirim data, dianggap halaman 1 dari 1)
-  $bookingPage  = $booking_page ?? 1;
-  $bookingTotal = $booking_total_pages ?? 1;
+  $booking_pending     = $booking_pending ?? [];
+  $bookingPage         = $booking_page ?? 1;
+  $bookingTotal        = $booking_total_pages ?? 1;
 
-  $userPage     = $user_page ?? 1;
-  $userTotal    = $user_total_pages ?? 1;
+  $user_pending        = $user_pending ?? [];
+  $userPage            = $user_page ?? 1;
+  $userTotal           = $user_total_pages ?? 1;
+
+  $verifikasi_hari_ini   = $verifikasi_hari_ini ?? 0;
+  $booking_hari_ini      = $booking_hari_ini ?? 0;
+  $ruang_kosong_hari_ini = $ruang_kosong_hari_ini ?? 0;
+  $user_aktif            = $user_aktif ?? 0;
   ?>
 
   <!-- KONTEN UTAMA -->
   <div class="flex-1 flex flex-col h-screen overflow-y-auto">
+
     <?php
     $flashPath = __DIR__ . '/../layout/flash.php';
     if (file_exists($flashPath)) {
       include $flashPath;
     }
     ?>
+
     <!-- NAVBAR -->
     <div class="m-4">
       <?php
@@ -52,24 +59,20 @@
 
       <!-- Statistik -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <!-- Verifikasi Hari Ini -->
         <div class="bg-[#1e3a5f] text-white rounded-lg p-6 text-center shadow">
-          <h2 class="text-4xl font-bold"><?= htmlspecialchars($verifikasi_hari_ini ?? 0) ?></h2>
+          <h2 class="text-4xl font-bold"><?= htmlspecialchars((string)$verifikasi_hari_ini) ?></h2>
           <p class="text-sm mt-2">Verifikasi hari ini</p>
         </div>
-        <!-- Booking Hari Ini -->
         <div class="bg-[#1e3a5f] text-white rounded-lg p-6 text-center shadow">
-          <h2 class="text-4xl font-bold"><?= htmlspecialchars($booking_hari_ini ?? 0) ?></h2>
+          <h2 class="text-4xl font-bold"><?= htmlspecialchars((string)$booking_hari_ini) ?></h2>
           <p class="text-sm mt-2">Booking hari ini</p>
         </div>
-        <!-- Ruang Aktif Hari Ini -->
         <div class="bg-[#1e3a5f] text-white rounded-lg p-6 text-center shadow">
-          <h2 class="text-4xl font-bold"><?= htmlspecialchars($ruang_kosong_hari_ini ?? 0) ?></h2>
+          <h2 class="text-4xl font-bold"><?= htmlspecialchars((string)$ruang_kosong_hari_ini) ?></h2>
           <p class="text-sm mt-2">Ruang aktif hari ini</p>
         </div>
-        <!-- Total User Aktif -->
         <div class="bg-[#1e3a5f] text-white rounded-lg p-6 text-center shadow">
-          <h2 class="text-4xl font-bold"><?= htmlspecialchars($user_aktif ?? 0) ?></h2>
+          <h2 class="text-4xl font-bold"><?= htmlspecialchars((string)$user_aktif) ?></h2>
           <p class="text-sm mt-2">User aktif</p>
         </div>
       </div>
@@ -100,6 +103,7 @@
               <th class="px-4 py-3">Aksi</th>
             </tr>
           </thead>
+
           <tbody>
             <?php if (!empty($booking_pending)): ?>
               <?php foreach ($booking_pending as $i => $b): ?>
@@ -111,58 +115,56 @@
                   <td class="px-4 py-3"><?= htmlspecialchars($b['kapasitas'] ?? '-') ?></td>
                   <td class="px-4 py-3">
                     <span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-semibold">
-                      <?= htmlspecialchars($b['status'] ?? 'Pending') ?>
+                      <?= htmlspecialchars($b['status'] ?? 'pending') ?>
                     </span>
                   </td>
                   <td class="px-4 py-3 space-x-2">
                     <form action="index.php?controller=adminBooking&action=approve" method="POST" class="inline">
                       <input type="hidden" name="id_booking" value="<?= (int)($b['id'] ?? 0) ?>">
-                      <button type="submit" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs transition">Setujui</button>
+                      <button type="submit"
+                        class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs transition">
+                        Setujui
+                      </button>
                     </form>
-                    <form action="index.php?controller=adminBooking&action=reject" method="POST" class="inline" onsubmit="return confirm('Yakin ingin menolak?');">
+
+                    <form action="index.php?controller=adminBooking&action=reject" method="POST" class="inline"
+                      onsubmit="return confirm('Yakin ingin menolak?');">
                       <input type="hidden" name="id_booking" value="<?= (int)($b['id'] ?? 0) ?>">
                       <input type="hidden" name="alasan" value="">
-                      <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition">Tolak</button>
+                      <button type="submit"
+                        class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition">
+                        Tolak
+                      </button>
                     </form>
                   </td>
                 </tr>
               <?php endforeach; ?>
             <?php else: ?>
               <tr>
-                <td colspan="7" class="px-4 py-8 text-center text-gray-500">Belum ada booking pending.</td>
+                <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                  Belum ada booking pending.
+                </td>
               </tr>
             <?php endif; ?>
           </tbody>
         </table>
 
-        <!-- PAGINATION BOOKING (REAL) -->
-        <?php if ($bookingTotal > 1): ?>
-          <div class="flex justify-center mt-4 space-x-2">
-            <!-- Prev -->
-            <?php if ($bookingPage > 1): ?>
-              <a href="index.php?controller=admin&action=home&tab=booking&booking_page=<?= $bookingPage - 1 ?>"
-                class="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-gray-700">&lt;</a>
-            <?php else: ?>
-              <span class="px-2 py-1 rounded bg-gray-100 text-gray-400 cursor-not-allowed">&lt;</span>
-            <?php endif; ?>
-
-            <!-- Numbers -->
-            <?php for ($i = 1; $i <= $bookingTotal; $i++): ?>
-              <a href="index.php?controller=admin&action=home&tab=booking&booking_page=<?= $i ?>"
-                class="px-3 py-1 rounded <?= $i == $bookingPage ? 'bg-[#1e3a5f] text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700' ?>">
-                <?= $i ?>
-              </a>
-            <?php endfor; ?>
-
-            <!-- Next -->
-            <?php if ($bookingPage < $bookingTotal): ?>
-              <a href="index.php?controller=admin&action=home&tab=booking&booking_page=<?= $bookingPage + 1 ?>"
-                class="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-gray-700">&gt;</a>
-            <?php else: ?>
-              <span class="px-2 py-1 rounded bg-gray-100 text-gray-400 cursor-not-allowed">&gt;</span>
-            <?php endif; ?>
-          </div>
-        <?php endif; ?>
+        <!-- PAGINATION BOOKING (pakai komponen) -->
+        <?php
+        $pagination = [
+          'pageKey'     => 'booking_page',
+          'currentPage' => (int)$bookingPage,
+          'totalPages'  => (int)$bookingTotal,
+          'params'      => [
+            'controller'  => 'admin',
+            'action'      => 'home',
+            'tab'         => 'booking',
+            // jaga state pagination tab lain biar nggak reset
+            'user_page'   => (int)$userPage,
+          ],
+        ];
+        include __DIR__ . '/../layout/pagination.php';
+        ?>
       </div>
 
       <!-- === TABEL USER PENDING === -->
@@ -178,6 +180,7 @@
               <th class="px-4 py-3">Aksi</th>
             </tr>
           </thead>
+
           <tbody>
             <?php if (!empty($user_pending)): ?>
               <?php foreach ($user_pending as $i => $u): ?>
@@ -185,6 +188,7 @@
                   <td class="px-4 py-3"><?= htmlspecialchars($u['nama'] ?? '-') ?></td>
                   <td class="px-4 py-3"><?= htmlspecialchars($u['email'] ?? '-') ?></td>
                   <td class="px-4 py-3"><?= htmlspecialchars($u['jurusan'] ?? '-') ?></td>
+
                   <td class="px-4 py-3 text-blue-600 hover:underline text-sm">
                     <?php if (!empty($u['screenshot_kubaca'])): ?>
                       <a href="<?= htmlspecialchars($u['screenshot_kubaca']) ?>" target="_blank">Lihat Bukti</a>
@@ -192,13 +196,14 @@
                       <span class="text-gray-400">Tidak ada</span>
                     <?php endif; ?>
                   </td>
+
                   <td class="px-4 py-3">
                     <span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-semibold">
-                      <?= htmlspecialchars($u['status'] ?? 'Pending') ?>
+                      <?= htmlspecialchars($u['status'] ?? 'pending') ?>
                     </span>
                   </td>
+
                   <td class="px-4 py-3 space-x-2">
-                    <!-- Setujui -->
                     <form action="index.php?controller=admin&action=approveUser" method="POST" class="inline">
                       <input type="hidden" name="id_registrasi" value="<?= (int)($u['id_registrasi'] ?? 0) ?>">
                       <button type="submit"
@@ -207,7 +212,6 @@
                       </button>
                     </form>
 
-                    <!-- Tolak -->
                     <form action="index.php?controller=admin&action=rejectUser" method="POST" class="inline"
                       onsubmit="return confirm('Yakin ingin menolak?');">
                       <input type="hidden" name="id_registrasi" value="<?= (int)($u['id_registrasi'] ?? 0) ?>">
@@ -217,59 +221,46 @@
                       </button>
                     </form>
                   </td>
-
                 </tr>
               <?php endforeach; ?>
             <?php else: ?>
               <tr>
-                <td colspan="6" class="px-4 py-8 text-center text-gray-500">Belum ada user pending verifikasi.</td>
+                <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                  Belum ada user pending verifikasi.
+                </td>
               </tr>
             <?php endif; ?>
           </tbody>
         </table>
 
-        <!-- PAGINATION USER (REAL) -->
-        <?php if ($userTotal > 1): ?>
-          <div class="flex justify-center mt-4 space-x-2">
-            <!-- Prev -->
-            <?php if ($userPage > 1): ?>
-              <a href="index.php?controller=admin&action=home&tab=user&user_page=<?= $userPage - 1 ?>"
-                class="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-gray-700">&lt;</a>
-            <?php else: ?>
-              <span class="px-2 py-1 rounded bg-gray-100 text-gray-400 cursor-not-allowed">&lt;</span>
-            <?php endif; ?>
-
-            <!-- Numbers -->
-            <?php for ($i = 1; $i <= $userTotal; $i++): ?>
-              <a href="index.php?controller=admin&action=home&tab=user&user_page=<?= $i ?>"
-                class="px-3 py-1 rounded <?= $i == $userPage ? 'bg-[#1e3a5f] text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700' ?>">
-                <?= $i ?>
-              </a>
-            <?php endfor; ?>
-
-            <!-- Next -->
-            <?php if ($userPage < $userTotal): ?>
-              <a href="index.php?controller=admin&action=home&tab=user&user_page=<?= $userPage + 1 ?>"
-                class="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-gray-700">&gt;</a>
-            <?php else: ?>
-              <span class="px-2 py-1 rounded bg-gray-100 text-gray-400 cursor-not-allowed">&gt;</span>
-            <?php endif; ?>
-          </div>
-        <?php endif; ?>
-
+        <!-- PAGINATION USER (pakai komponen) -->
+        <?php
+        $pagination = [
+          'pageKey'     => 'user_page',
+          'currentPage' => (int)$userPage,
+          'totalPages'  => (int)$userTotal,
+          'params'      => [
+            'controller'    => 'admin',
+            'action'        => 'home',
+            'tab'           => 'user',
+            // jaga state pagination tab lain biar nggak reset
+            'booking_page'  => (int)$bookingPage,
+          ],
+        ];
+        include __DIR__ . '/../layout/pagination.php';
+        ?>
       </div>
 
     </div>
   </div>
 
-  <!-- SCRIPT TAB (Hanya untuk interaksi visual instan, logic utama via URL di PHP) -->
+  <!-- SCRIPT TAB (visual instan) -->
   <script>
     const tabBooking = document.getElementById('tabBooking');
     const tabUser = document.getElementById('tabUser');
     const bookingTable = document.getElementById('bookingTable');
     const userTable = document.getElementById('userTable');
 
-    // Fungsi helper untuk ganti URL tanpa refresh (agar kalau di refresh tetap di tab yg sama)
     function setTabUrl(tabName) {
       const url = new URL(window.location);
       url.searchParams.set('tab', tabName);

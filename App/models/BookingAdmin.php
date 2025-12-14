@@ -437,30 +437,49 @@ class BookingAdmin extends BookingBase
     {
         $resModel = new \App\Models\BookingReschedule();
         $res      = $resModel->findWithBooking($idReschedule);
+
         if (!$res) {
-            return ['success' => false, 'message' => 'Data reschedule tidak ditemukan.'];
+            return [
+                'success' => false,
+                'message' => 'Data reschedule tidak ditemukan.',
+            ];
         }
-        $idBooking = (int)$res['id_bookings'];
+
+        $idBooking  = (int)($res['id_bookings'] ?? 0);
+        if ($idBooking <= 0) {
+            return [
+                'success' => false,
+                'message' => 'Data booking pada reschedule tidak valid.',
+            ];
+        }
+
         $lastStatus = $this->getLastStatus($idBooking);
         if ($lastStatus !== 'reschedule_pending') {
             return [
-                'success' => false,
-                'message' => 'Reschedule ini sudah diproses atau tidak dalam status pending.'
+                'success'    => false,
+                'message'    => 'Reschedule ini sudah diproses atau tidak dalam status pending.',
+                'id_booking' => $idBooking,
             ];
         }
+
+        // Bentrok jadwal (kecuali booking ini sendiri)
         if ($this->isBentrokExcept(
             (int)$res['id_ruangan'],
             $res['new_start_time'],
             $res['new_end_time'],
-            (int)$res['id_bookings']
+            $idBooking
         )) {
             return [
-                'success' => false,
-                'message' => 'Jadwal baru bentrok dengan booking lain.'
+                'success'    => false,
+                'message'    => 'Jadwal baru bentrok dengan booking lain.',
+                'id_booking' => $idBooking,
             ];
         }
+
         try {
             self::$db->beginTransaction();
+
+            // 1) Update jadwal booking utama
             $sqlUpd = "UPDATE " . self::$table . "
                    SET id_ruangan = :id_ruangan,
                        start_time = :start_time,
@@ -470,21 +489,25 @@ class BookingAdmin extends BookingBase
 
             $stmt = self::$db->prepare($sqlUpd);
             $stmt->execute([
-                'id_ruangan' => $res['id_ruangan'],
+                'id_ruangan' => (int)$res['id_ruangan'],
                 'start_time' => $res['new_start_time'],
                 'end_time'   => $res['new_end_time'],
                 'tanggal'    => $res['new_tanggal'],
                 'id'         => $idBooking,
             ]);
 
+            // 2) Sync anggota (Booking_member) dari reschedule
             $members = $resModel->getMembers($idReschedule);
+
             $del = self::$db->prepare("DELETE FROM Booking_member WHERE id_bookings = :id");
             $del->execute(['id' => $idBooking]);
+
             if (!empty($members)) {
                 $ins = self::$db->prepare(
                     "INSERT INTO Booking_member (id_bookings, id_user)
                  VALUES (:id_bookings, :id_user)"
                 );
+
                 foreach ($members as $m) {
                     $ins->execute([
                         'id_bookings' => $idBooking,
@@ -509,6 +532,8 @@ class BookingAdmin extends BookingBase
                 );
                 $updCount->execute(['id' => $idBooking]);
             }
+
+            // 3) Tambahkan status reschedule_approved
             $this->addStatus(
                 $idBooking,
                 'reschedule_approved',
@@ -516,16 +541,27 @@ class BookingAdmin extends BookingBase
                 $idReschedule,
                 $res['alasan'] ?? null
             );
+
             self::$db->commit();
-            return ['success' => true];
+
+            // ✅ KUNCI: balikin id_booking supaya controller bisa kirim notif
+            return [
+                'success'      => true,
+                'id_booking'   => $idBooking,
+                'id_reschedule' => $idReschedule,
+            ];
         } catch (\Exception $e) {
             self::$db->rollBack();
+            error_log('[approveReschedule ERROR] ' . $e->getMessage());
+
             return [
-                'success' => false,
-                'message' => 'Gagal menyetujui reschedule. Silakan coba lagi.'
+                'success'    => false,
+                'message'    => 'Gagal menyetujui reschedule. Silakan coba lagi.',
+                'id_booking' => $idBooking,
             ];
         }
     }
+
     public function rejectReschedule(int $idReschedule, ?string $alasan = null): array
     {
         $resModel = new \App\Models\BookingReschedule();
@@ -567,52 +603,71 @@ class BookingAdmin extends BookingBase
     }
 
 
-    public function cancelBookingsByDate(string $tanggal): int
+    public function cancelBookingsByDate(string $tanggal): array
     {
         $sql = "
-            SELECT b.id_bookings
-            FROM " . self::$table . " b
-            LEFT JOIN Booking_status bs_latest
-                ON bs_latest.id_status = (
-                    SELECT MAX(bs2.id_status)
-                    FROM Booking_status bs2
-                    WHERE bs2.id_bookings = b.id_bookings
-                )
-            WHERE 
-                b.tanggal = :tanggal
-                AND b.submitted = 1
-                AND (
-                    bs_latest.status IS NULL
-                    OR bs_latest.status NOT IN ('cancelled', 'rejected', 'selesai')
-                )
-        ";
+        SELECT 
+            b.id_bookings,
+            b.id_pj,
+            b.booking_code,
+            b.start_time,
+            b.end_time,
+            r.nama_ruangan,
+            a.email,
+            a.nama
+        FROM " . self::$table . " b
+        JOIN Ruangan r ON r.id_ruangan = b.id_ruangan
+        LEFT JOIN Account a ON a.id_account = b.id_pj
+        LEFT JOIN Booking_status bs_latest
+            ON bs_latest.id_status = (
+                SELECT MAX(bs2.id_status)
+                FROM Booking_status bs2
+                WHERE bs2.id_bookings = b.id_bookings
+            )
+        WHERE 
+            b.tanggal = :tanggal
+            AND b.submitted = 1
+            AND (
+                bs_latest.status IS NULL
+                OR bs_latest.status NOT IN ('cancelled', 'rejected', 'selesai')
+            )
+    ";
+
         $stmt = self::$db->prepare($sql);
         $stmt->execute(['tanggal' => $tanggal]);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        if (empty($rows)) {
-            return 0;
-        }
-        self::$db->beginTransaction();
+        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
+        if (empty($rows)) {
+            return [];
+        }
+
+        self::$db->beginTransaction();
         try {
-            $count = 0;
+            $cancelled = [];
+
             foreach ($rows as $row) {
+                $idBooking = (int)$row['id_bookings'];
+
                 $this->addStatus(
-                    (int)$row['id_bookings'],
+                    $idBooking,
                     'cancelled',
                     'Dibatalkan karena penutupan perpustakaan',
                     null,
                     null
                 );
-                $count++;
+
+                $cancelled[] = $row;
             }
+
             self::$db->commit();
-            return $count;
+            return $cancelled;
         } catch (\Exception $e) {
             self::$db->rollBack();
-            return 0;
+            error_log("[cancelBookingsByDate] " . $e->getMessage());
+            return [];
         }
     }
+
     public function setCheckinTime(int $idBooking): bool
     {
         $sql = "UPDATE " . self::$table . "
@@ -675,11 +730,21 @@ class BookingAdmin extends BookingBase
         ];
     }
 
-    public function autoCancelLateBookings(): int
+    public function autoCancelLateBookings(): array
     {
         $sql = "
-        SELECT b.id_bookings
+        SELECT 
+            b.id_bookings,
+            b.id_pj,
+            b.booking_code,
+            b.start_time,
+            b.end_time,
+            r.nama_ruangan,
+            a.email,
+            a.nama
         FROM Bookings b
+        JOIN Ruangan r ON r.id_ruangan = b.id_ruangan
+        LEFT JOIN Account a ON a.id_account = b.id_pj
         LEFT JOIN Booking_status bs_latest
             ON bs_latest.id_status = (
                 SELECT MAX(bs2.id_status)
@@ -690,19 +755,18 @@ class BookingAdmin extends BookingBase
             b.submitted = 1
             AND b.checkin_time IS NULL
             AND b.start_time < DATE_SUB(NOW(), INTERVAL 10 MINUTE)
-            AND (
-                bs_latest.status IN ('approved', 'reschedule_approved')
-            )
+            AND bs_latest.status IN ('approved', 'reschedule_approved')
     ";
 
-        $stmt = self::$db->query($sql);
+        $stmt = self::$db->prepare($sql);
+        $stmt->execute();
         $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
-        $count = 0;
+        $cancelled = [];
+
         foreach ($rows as $row) {
             $idBooking = (int)$row['id_bookings'];
 
-            // Tambahkan status cancelled
             $this->addStatus(
                 $idBooking,
                 'cancelled',
@@ -710,11 +774,14 @@ class BookingAdmin extends BookingBase
                 null,
                 null
             );
-            $count++;
+
+            $cancelled[] = $row;
         }
 
-        return $count;
+        return $cancelled;
     }
+
+
     public function countAllForAdmin(): int
     {
         $sql = "
@@ -795,5 +862,141 @@ class BookingAdmin extends BookingBase
         }
 
         return $count;
+    }
+    private function buildAdminManageFilter(string $status, string $q, string $tipe): array
+    {
+        $where  = [];
+        $params = [];
+
+        // Filter tipe
+        if ($tipe === 'internal') {
+            $where[] = "is_external = 0";
+        } elseif ($tipe === 'external') {
+            $where[] = "is_external = 1";
+        }
+
+        // Filter status
+        if ($status !== 'all') {
+            // normalisasi beberapa alias
+            if ($status === 'completed') $status = 'selesai';
+
+            $where[] = "last_status = :status";
+            $params[':status'] = $status;
+        }
+
+        // Search keyword
+        $q = trim($q);
+        if ($q !== '') {
+            $where[] = "(
+                booking_code LIKE :q
+                OR COALESCE(pj_nama,'') LIKE :q
+                OR COALESCE(pj_nim,'') LIKE :q
+                OR COALESCE(nama_ruangan,'') LIKE :q
+                OR COALESCE(lokasi,'') LIKE :q
+                OR COALESCE(guest_name,'') LIKE :q
+                OR COALESCE(asal_instansi,'') LIKE :q
+            )";
+            $params[':q'] = '%' . $q . '%';
+        }
+
+        $whereSql = '';
+        if (!empty($where)) {
+            $whereSql = 'WHERE ' . implode(' AND ', $where);
+        }
+
+        return [$whereSql, $params];
+    }
+
+    public function countForAdmin(string $status = 'all', string $q = '', string $tipe = 'all'): int
+    {
+        [$whereSql, $params] = $this->buildAdminManageFilter($status, $q, $tipe);
+
+        $sql = "
+            SELECT COUNT(*)
+            FROM v_admin_booking
+            {$whereSql}
+        ";
+
+        $stmt = self::$db->prepare($sql);
+        foreach ($params as $k => $v) {
+            $stmt->bindValue($k, $v, PDO::PARAM_STR);
+        }
+        $stmt->execute();
+
+        return (int)$stmt->fetchColumn();
+    }
+
+    public function getForAdmin(
+        int $limit = 5,
+        int $offset = 0,
+        string $status = 'all',
+        string $q = '',
+        string $tipe = 'all'
+    ): array {
+        [$whereSql, $params] = $this->buildAdminManageFilter($status, $q, $tipe);
+
+        $sql = "
+            SELECT 
+                id_bookings, booking_code, jumlah_anggota, start_time, 
+                end_time, tanggal, is_external, submitted, guest_name, 
+                guest_email, guest_phone, asal_instansi,
+                nama_ruangan, kapasitas_max, lokasi, pj_nama, pj_nim, last_status,
+                checkin_time
+            FROM v_admin_booking
+            {$whereSql}
+            ORDER BY tanggal DESC, start_time DESC
+            LIMIT :limit OFFSET :offset
+        ";
+
+        $stmt = self::$db->prepare($sql);
+
+        // bind filter params
+        foreach ($params as $k => $v) {
+            $stmt->bindValue($k, $v, PDO::PARAM_STR);
+        }
+
+        // bind pagination params
+        $stmt->bindValue(':limit',  (int)$limit,  PDO::PARAM_INT);
+        $stmt->bindValue(':offset', (int)$offset, PDO::PARAM_INT);
+
+        $stmt->execute();
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $result = [];
+        foreach ($rows as $row) {
+            $start = strtotime($row['start_time']);
+            $end   = strtotime($row['end_time']);
+
+            $tanggalLabel = date('d M', strtotime($row['tanggal']));
+            $jamLabel     = date('H:i', $start) . '–' . date('H:i', $end);
+
+            $pjName = $row['pj_nama'] ?: ($row['guest_name'] ?: '-');
+
+            $result[] = [
+                'id'             => (int)$row['id_bookings'],
+                'kode'           => $row['booking_code'],
+                'pj'             => $pjName,
+                'pj_nim'         => $row['pj_nim'] ?? null,
+                'ruang'          => $row['nama_ruangan'] ?? '-',
+                'lokasi'         => $row['lokasi'] ?? null,
+                'waktu'          => $tanggalLabel . ', ' . $jamLabel,
+                'tanggal'        => $row['tanggal'],
+                'start_time'     => $row['start_time'],
+                'end_time'       => $row['end_time'],
+                'kapasitas'      => ($row['jumlah_anggota'] ?? 0) . ' / ' . ($row['kapasitas_max'] ?? '-'),
+                'jumlah_anggota' => (int)($row['jumlah_anggota'] ?? 0),
+                'status'         => $row['last_status'],
+                'is_external'    => (int)$row['is_external'],
+                'submitted'      => (int)$row['submitted'],
+                'guest_name'     => $row['guest_name'] ?? null,
+                'guest_email'    => $row['guest_email'] ?? null,
+                'guest_phone'    => $row['guest_phone'] ?? null,
+                'asal_instansi'  => $row['asal_instansi'] ?? null,
+                'checkin_time'   => $row['checkin_time'] ?? null,
+                'tipe'           => ((int)$row['is_external'] === 1) ? 'external' : 'internal',
+            ];
+        }
+
+        return $result;
     }
 }

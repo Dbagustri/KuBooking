@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core;
 
 class Controller
@@ -23,7 +24,7 @@ class Controller
     {
         return $_POST[$key] ?? $_GET[$key] ?? $default;
     }
-public function redirectWithMessage($url, $message, $type = 'success')
+    public function redirectWithMessage($url, $message, $type = 'success')
     {
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
@@ -36,5 +37,18 @@ public function redirectWithMessage($url, $message, $type = 'success')
 
         header("Location: $url");
         exit;
-    }    
+    }
+    protected function isWeekend(string $tanggal): bool
+    {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $tanggal)) return false;
+
+        $day = (int)date('N', strtotime($tanggal));
+        return $day >= 6;
+    }
+
+
+    protected function weekendMessage(): string
+    {
+        return 'Peminjaman tidak tersedia pada Sabtu/Minggu. Silakan pilih hari kerja (Senin–Jumat).';
+    }
 }
