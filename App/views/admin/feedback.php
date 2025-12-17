@@ -44,26 +44,25 @@
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div>
                     <h1 class="text-2xl font-bold text-[#1e3a5f]">Feedback Pengguna</h1>
-                    <p class="text-sm text-gray-500 mt-1">
-                        Lihat ringkasan rating dan komentar pengguna untuk setiap peminjaman ruangan.
-                    </p>
                 </div>
             </div>
 
             <!-- FILTER & SEARCH -->
-            <div class="flex flex-col lg:flex-row lg:items-center lg:space-x-4 space-y-3 lg:space-y-0 mt-2">
+            <div class="flex flex-col lg:flex-row items-stretch gap-3 mt-2 w-full">
 
-                <!-- FILTER -->
-                <form id="filterForm" method="get" class="flex flex-col lg:flex-row lg:items-center lg:space-x-4 space-y-3 lg:space-y-0 w-full">
+                <!-- FILTER FORM -->
+                <form id="filterForm"
+                    method="get"
+                    class="flex flex-col sm:flex-row gap-3">
                     <input type="hidden" name="controller" value="userFeedback">
                     <input type="hidden" name="action" value="adminIndex">
                     <input type="hidden" name="q" value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>">
                     <input type="hidden" name="page" value="1">
 
-                    <!-- FILTER RUANGAN -->
+                    <!-- Semua Ruangan -->
                     <select name="room"
-                        onchange="document.getElementById('filterForm').submit()"
-                        class="bg-white border border-gray-300 rounded-full px-4 py-2 text-sm shadow w-full lg:w-auto">
+                        onchange="this.form.submit()"
+                        class="bg-white border border-gray-300 rounded-full px-4 py-2 text-sm shadow min-w-[180px]">
                         <option value="all" <?= (string)$roomFilter === 'all' ? 'selected' : '' ?>>Semua Ruangan</option>
                         <?php foreach ($rooms as $room): ?>
                             <?php
@@ -76,10 +75,10 @@
                         <?php endforeach; ?>
                     </select>
 
-                    <!-- FILTER MINIMUM RATING -->
+                    <!-- Semua Rating -->
                     <select name="rating"
-                        onchange="document.getElementById('filterForm').submit()"
-                        class="bg-white border border-gray-300 rounded-full px-4 py-2 text-sm shadow w-full lg:w-auto">
+                        onchange="this.form.submit()"
+                        class="bg-white border border-gray-300 rounded-full px-4 py-2 text-sm shadow min-w-[160px]">
                         <option value="all" <?= (string)$ratingFilter === 'all' ? 'selected' : '' ?>>Semua Rating</option>
                         <option value="5" <?= (string)$ratingFilter === '5' ? 'selected' : '' ?>>⭐ 5 ke atas</option>
                         <option value="4" <?= (string)$ratingFilter === '4' ? 'selected' : '' ?>>⭐ 4 ke atas</option>
@@ -89,28 +88,32 @@
                     </select>
                 </form>
 
-                <!-- SEARCH (BUTUH SUBMIT) -->
-                <form method="get" class="flex flex-1 items-center w-full">
+                <!-- SEARCH -->
+                <form method="get"
+                    class="flex flex-1 items-center gap-2">
                     <input type="hidden" name="controller" value="userFeedback">
                     <input type="hidden" name="action" value="adminIndex">
                     <input type="hidden" name="room" value="<?= htmlspecialchars((string)$roomFilter, ENT_QUOTES, 'UTF-8') ?>">
                     <input type="hidden" name="rating" value="<?= htmlspecialchars((string)$ratingFilter, ENT_QUOTES, 'UTF-8') ?>">
                     <input type="hidden" name="page" value="1">
 
+                    <!-- Input -->
                     <div class="flex flex-1 items-center bg-white rounded-full px-4 py-2 shadow border border-gray-200">
                         <input type="text"
                             name="q"
                             value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>"
-                            placeholder="Cari berdasarkan nama user, NIM/NIP, ruangan, atau komentar"
+                            placeholder="Cari user, NIM/NIP, ruangan, komentar..."
                             class="flex-1 text-sm bg-transparent focus:outline-none">
                     </div>
 
+                    <!-- Tombol O (kacamata pembesar) -->
                     <button type="submit"
-                        class="ml-2 w-10 h-10 rounded-full bg-[#1e3a5f] flex items-center justify-center text-white hover:bg-[#163052] transition">
+                        class="w-10 h-10 rounded-full bg-[#1e3a5f] flex items-center justify-center text-white hover:bg-[#163052] transition">
                         🔍
                     </button>
                 </form>
             </div>
+
 
             <!-- TABEL FEEDBACK -->
             <div class="overflow-x-auto mt-4">

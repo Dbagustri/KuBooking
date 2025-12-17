@@ -46,9 +46,6 @@
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                     <h1 class="text-2xl font-bold text-[#1e3a5f]">Kelola Anggota</h1>
-                    <p class="text-sm text-gray-500 mt-1">
-                        Lihat dan kelola data akun mahasiswa, dosen, dan tendik.
-                    </p>
                 </div>
 
                 <a href="index.php?controller=admin&action=tambahAnggota"

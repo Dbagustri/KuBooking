@@ -89,15 +89,16 @@
 
             <!-- BAR FILTER & SEARCH (1 form, filter auto submit, search pakai tombol) -->
             <form id="bookingFilterForm" method="get" action="index.php"
-                class="flex flex-col lg:flex-row lg:items-center lg:space-x-4 space-y-3 lg:space-y-0 mt-4">
+                class="flex flex-col lg:flex-row items-stretch gap-3 mt-4 w-full">
 
                 <input type="hidden" name="controller" value="adminBooking">
                 <input type="hidden" name="action" value="manage">
-                <input type="hidden" name="tipe" value="<?= htmlspecialchars($typeFilter) ?>">
+                <input type="hidden" name="tipe" value="<?= htmlspecialchars($typeFilter, ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="page" value="1">
 
+                <!-- STATUS -->
                 <select name="status" id="statusSelect"
-                    class="bg-white border border-gray-300 rounded-full px-4 py-2 text-sm shadow">
+                    class="bg-white border border-gray-300 rounded-full px-4 py-2 text-sm shadow min-w-[180px]">
                     <option value="all" <?= $statusFilter === 'all' ? 'selected' : '' ?>>Semua Status</option>
                     <option value="pending" <?= $statusFilter === 'pending' ? 'selected' : '' ?>>Pending</option>
                     <option value="approved" <?= $statusFilter === 'approved' ? 'selected' : '' ?>>Disetujui</option>
@@ -109,19 +110,22 @@
                     </option>
                 </select>
 
+                <!-- SEARCH -->
                 <div class="flex flex-1 items-center bg-white rounded-full px-4 py-2 shadow border border-gray-200">
                     <input type="text"
                         name="q"
-                        value="<?= htmlspecialchars($search) ?>"
+                        value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>"
                         placeholder="Cari kode booking, nama PJ, ruangan, atau instansi"
                         class="flex-1 text-sm bg-transparent focus:outline-none">
                 </div>
 
+                <!-- BUTTON 🔍 -->
                 <button type="submit"
                     class="w-10 h-10 rounded-full bg-[#1e3a5f] flex items-center justify-center text-white hover:bg-[#163052] transition">
                     🔍
                 </button>
             </form>
+
 
             <!-- TABEL BOOKING -->
             <div class="mt-4">
@@ -213,9 +217,6 @@
                                                 <div class="flex flex-col gap-0.5">
                                                     <span class="font-mono text-sm font-semibold text-slate-900">
                                                         <?= htmlspecialchars($b['kode'] ?? $b['booking_code'] ?? '-') ?>
-                                                    </span>
-                                                    <span class="inline-flex items-center rounded-full bg-slate-100 text-[10px] px-2 py-0.5 text-slate-600">
-                                                        <?= htmlspecialchars(ucfirst($tipe)) ?>
                                                     </span>
                                                 </div>
                                             </td>

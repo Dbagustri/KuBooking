@@ -59,13 +59,6 @@
             <div class="pt-4 sm:pt-6">
                 <div class="flex items-center justify-between gap-3">
                     <div>
-                        <nav class="text-xs text-gray-500 mb-1">
-                            <a href="index.php?controller=admin&action=home" class="hover:text-[#1e3a5f]">Dashboard</a>
-                            <span class="mx-1">/</span>
-                            <a href="index.php?controller=admin&action=anggota" class="hover:text-[#1e3a5f]">Kelola Anggota</a>
-                            <span class="mx-1">/</span>
-                            <span class="text-gray-700">Edit User</span>
-                        </nav>
                         <h1 class="text-2xl sm:text-3xl font-bold text-[#1e3a5f] tracking-tight">
                             Edit User
                         </h1>
@@ -284,23 +277,6 @@
                                     <option value="aktif" <?= $statusAktif === 'aktif' ? 'selected' : '' ?>>Aktif</option>
                                     <option value="nonaktif" <?= $statusAktif === 'nonaktif' ? 'selected' : '' ?>>Nonaktif</option>
                                 </select>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs sm:text-sm text-gray-600">
-                            <div class="bg-slate-50 rounded-xl p-3 border border-slate-100">
-                                <p class="font-semibold mb-1 text-gray-700">Catatan Role</p>
-                                <ul class="list-disc list-inside space-y-1">
-                                    <li>Mengubah role dapat mengubah hak akses di Kubooking.</li>
-                                    <li>Pastikan role sesuai dengan status kepegawaian / kemahasiswaan.</li>
-                                </ul>
-                            </div>
-                            <div class="bg-slate-50 rounded-xl p-3 border border-slate-100">
-                                <p class="font-semibold mb-1 text-gray-700">Catatan Status Akun</p>
-                                <ul class="list-disc list-inside space-y-1">
-                                    <li>Akun <span class="font-semibold">nonaktif</span> tidak dapat login maupun melakukan booking.</li>
-                                    <li>Admin tidak dapat menonaktifkan atau menghapus akun dirinya sendiri (dicek di controller).</li>
-                                </ul>
                             </div>
                         </div>
                     </div>

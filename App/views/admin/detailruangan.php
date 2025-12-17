@@ -228,7 +228,7 @@
                 <div class="pt-6 border-t flex flex-wrap gap-3">
 
                     <a href="index.php?controller=admin&action=editRoom&id=<?= $idRuangan ?>"
-                        class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold">
+                        class="px-5 py-2 bg-blue-600 text-white rounded-3xl hover:bg-blue-700 text-sm font-semibold">
                         Edit Ruangan
                     </a>
 
@@ -240,12 +240,12 @@
 
                         <?php if ($status === 'aktif'): ?>
                             <button type="submit"
-                                class="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-semibold">
+                                class="px-5 py-2 bg-red-600 text-white rounded-3xl hover:bg-red-700 text-sm font-semibold">
                                 Nonaktifkan Ruangan
                             </button>
                         <?php else: ?>
                             <button type="submit"
-                                class="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-semibold">
+                                class="px-5 py-2 bg-green-600 text-white rounded-3xl hover:bg-green-700 text-sm font-semibold">
                                 Aktifkan Ruangan
                             </button>
                         <?php endif; ?>

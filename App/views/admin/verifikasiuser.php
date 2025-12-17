@@ -49,35 +49,49 @@ $current_page = max(1, (int)($_GET['page'] ?? ($current_page ?? 1)));
 
             <!-- FILTER & SEARCH -->
             <form id="verifForm" method="get" action="index.php"
-                class="flex flex-col md:flex-row md:items-center md:space-x-4 space-y-3 md:space-y-0">
+                class="flex flex-col lg:flex-row lg:items-center gap-4">
 
                 <input type="hidden" name="controller" value="admin">
                 <input type="hidden" name="action" value="verifikasiUser">
                 <input type="hidden" name="page" value="1">
 
-                <!-- FILTER (auto submit) -->
-                <div class="flex items-center space-x-2">
+                <!-- FILTER (pill) -->
+                <div class="w-full lg:w-[260px]">
                     <select name="filter" id="filterSelect"
-                        class="px-4 py-2 rounded-lg bg-white border shadow text-sm">
-                        <option value="all" <?= $filter === 'all' ? 'selected' : '' ?>>Semua</option>
+                        class="w-full px-5 py-3 rounded-full bg-white border border-slate-200 shadow-sm
+                       text-sm text-slate-700 outline-none
+                       focus:ring-2 focus:ring-slate-200">
+                        <option value="all" <?= $filter === 'all' ? 'selected' : '' ?>>Semua Status</option>
                         <option value="pending" <?= $filter === 'pending' ? 'selected' : '' ?>>Pending</option>
                         <option value="rejected" <?= $filter === 'rejected' ? 'selected' : '' ?>>Rejected</option>
                         <option value="approved" <?= $filter === 'approved' ? 'selected' : '' ?>>Approved</option>
                     </select>
                 </div>
 
-                <!-- SEARCH -->
-                <div class="flex flex-1 items-center">
-                    <input type="text" name="q" placeholder="Cari nama / email..."
-                        value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>"
-                        class="flex-1 px-4 py-2 rounded-l-full bg-white border shadow text-sm">
+                <!-- SEARCH (pill panjang + tombol bulat) -->
+                <div class="w-full flex items-center gap-3">
+                    <div class="flex-1">
+                        <input type="text" name="q"
+                            placeholder="Cari kode booking, nama PJ, ruangan, atau instansi"
+                            value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>"
+                            class="w-full px-6 py-3 rounded-full bg-white border border-slate-200 shadow-sm
+                          text-sm text-slate-700 placeholder:text-slate-400 outline-none
+                          focus:ring-2 focus:ring-slate-200">
+                    </div>
 
                     <button type="submit"
-                        class="px-4 py-2 bg-[#1e3a5f] text-white rounded-r-full text-sm">
-                        🔍
+                        class="w-12 h-12 rounded-full bg-[#0b2a4a] text-white shadow-sm
+                       hover:opacity-95 active:scale-95 transition flex items-center justify-center"
+                        aria-label="Search">
+                        <!-- icon -->
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M21 21l-4.35-4.35m1.35-5.15a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
                     </button>
                 </div>
             </form>
+
 
             <!-- TABLE -->
             <div class="overflow-x-auto">
@@ -98,10 +112,34 @@ $current_page = max(1, (int)($_GET['page'] ?? ($current_page ?? 1)));
                         <?php if (!empty($list)): ?>
                             <?php foreach ($list as $i => $u): ?>
                                 <?php
-                                $rowId   = (int)($u['id_registrasi'] ?? 0);
-                                $status  = $u['status'] ?? 'pending';
-                                $role    = $u['role_registrasi'] ?? '-';
+                                $rowId  = (int)($u['id_registrasi'] ?? 0);
+                                $status = $u['status'] ?? 'pending';
 
+                                // =================== ROLE BADGE (CONSISTENT) ===================
+                                $roleRaw = $u['role_registrasi'] ?? '-';
+                                $role    = strtolower(trim((string)$roleRaw));
+
+                                $roleBadgeClass = 'bg-slate-100 text-slate-700';
+                                if ($role === 'mahasiswa') {
+                                    $roleBadgeClass = 'bg-blue-100 text-blue-800';
+                                } elseif ($role === 'dosen') {
+                                    $roleBadgeClass = 'bg-emerald-100 text-emerald-800';
+                                } elseif ($role === 'tendik') {
+                                    $roleBadgeClass = 'bg-amber-100 text-amber-800';
+                                }
+
+                                $roleLabel = ucfirst($role);
+                                if ($role === 'mahasiswa') {
+                                    $roleLabel = 'Mahasiswa';
+                                } elseif ($role === 'dosen') {
+                                    $roleLabel = 'Dosen';
+                                } elseif ($role === 'tendik') {
+                                    $roleLabel = 'Tendik';
+                                } elseif ($role === '-' || $role === '') {
+                                    $roleLabel = '-';
+                                }
+
+                                // =================== STATUS BADGE ===================
                                 $badgeClass = 'bg-yellow-100 text-yellow-700';
                                 if ($status === 'approved') {
                                     $badgeClass = 'bg-green-100 text-green-700';
@@ -125,11 +163,14 @@ $current_page = max(1, (int)($_GET['page'] ?? ($current_page ?? 1)));
                                         echo htmlspecialchars($jurusan ?: $unit ?: '-', ENT_QUOTES, 'UTF-8');
                                         ?>
                                     </td>
+
+                                    <!-- ✅ ROLE BADGE (UPDATED) -->
                                     <td class="px-4 py-3">
-                                        <span class="px-2 py-1 rounded-full bg-gray-100 text-xs font-medium text-gray-700">
-                                            <?= htmlspecialchars(ucfirst($role), ENT_QUOTES, 'UTF-8') ?>
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold <?= $roleBadgeClass ?>">
+                                            <?= htmlspecialchars($roleLabel, ENT_QUOTES, 'UTF-8') ?>
                                         </span>
                                     </td>
+
                                     <td class="px-4 py-3">
                                         <?php if (!empty($u['screenshot_kubaca'])): ?>
                                             <a href="<?= htmlspecialchars($u['screenshot_kubaca'], ENT_QUOTES, 'UTF-8') ?>"
@@ -141,6 +182,7 @@ $current_page = max(1, (int)($_GET['page'] ?? ($current_page ?? 1)));
                                             <span class="text-gray-400 text-xs">tidak ada</span>
                                         <?php endif; ?>
                                     </td>
+
                                     <td class="px-4 py-3">
                                         <span class="px-3 py-1 rounded-full text-xs font-semibold <?= $badgeClass ?>">
                                             <?= htmlspecialchars(ucfirst($status), ENT_QUOTES, 'UTF-8') ?>

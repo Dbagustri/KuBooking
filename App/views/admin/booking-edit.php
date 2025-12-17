@@ -92,9 +92,6 @@ if (!empty($members)) {
                     <h1 class="text-2xl font-bold text-[#1e3a5f]">
                         Edit Booking
                     </h1>
-                    <p class="text-xs text-slate-500 mt-1">
-                        Perubahan pada form ini langsung mengubah data booking dan anggota tanpa proses approval.
-                    </p>
                 </div>
 
 
@@ -242,10 +239,6 @@ if (!empty($members)) {
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Keperluan & Tombol Simpan -->
-                    <div class="bg-white rounded-3xl shadow-md p-6 border border-slate-100 space-y-4">
                         <div>
                             <label class="block text-xs font-semibold text-slate-700 mb-1.5">
                                 Keperluan Peminjaman
@@ -257,7 +250,10 @@ if (!empty($members)) {
                                              focus:outline-none focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent"
                                 placeholder="Contoh: Rapat himpunan, diskusi kelas, pelatihan, dll."><?= htmlspecialchars($keperluan); ?></textarea>
                         </div>
+                    </div>
 
+                    <!-- Keperluan & Tombol Simpan -->
+                    <div class="bg-white rounded-3xl shadow-md p-6 border border-slate-100 space-y-4">
                         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t pt-3">
                             <p class="text-[11px] text-slate-500 max-w-md">
                                 Perubahan akan langsung tersimpan tanpa approval ulang. Pastikan jadwal dan anggota sudah benar.

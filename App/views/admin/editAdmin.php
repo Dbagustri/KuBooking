@@ -214,12 +214,12 @@ $status_aktif = $old['status_aktif'] ?? ($admin['status_aktif'] ?? 'aktif');
                     <!-- SUBMIT -->
                     <div class="pt-4 flex flex-wrap gap-3">
                         <button type="submit"
-                            class="w-full sm:w-auto px-6 py-2.5 rounded-md bg-[#1e3a5f] text-white text-sm font-semibold hover:bg-[#163052]">
+                            class="w-full sm:w-auto px-6 py-2.5 rounded-3xl bg-[#1e3a5f] text-white text-sm font-semibold hover:bg-[#163052]">
                             Simpan Perubahan
                         </button>
 
                         <a href="index.php?controller=superAdmin&action=kelolaAdmin"
-                            class="w-full sm:w-auto px-6 py-2.5 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-100 text-center">
+                            class="w-full sm:w-auto px-6 py-2.5 rounded-3xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-100 text-center">
                             Batal
                         </a>
                     </div>

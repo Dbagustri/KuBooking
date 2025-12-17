@@ -310,12 +310,12 @@
                         <!-- TOMBOL AKSI -->
                         <div class="pt-4 border-t border-gray-100 flex flex-col md:flex-row md:justify-end gap-3">
                             <a href="index.php?controller=admin&action=ruangan"
-                                class="inline-flex justify-center px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm font-medium">
+                                class="inline-flex justify-center px-4 py-2 rounded-3xl bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm font-medium">
                                 Batal
                             </a>
                             <button
                                 type="submit"
-                                class="inline-flex justify-center px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-sm">
+                                class="inline-flex justify-center px-5 py-2 rounded-3xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-sm">
                                 Simpan Perubahan
                             </button>
                         </div>

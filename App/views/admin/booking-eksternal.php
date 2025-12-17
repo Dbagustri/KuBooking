@@ -45,9 +45,6 @@
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
                 <div>
                     <h1 class="text-2xl font-bold text-[#1e3a5f]">Buat Booking Eksternal</h1>
-                    <p class="text-xs text-slate-500 mt-1">
-                        Untuk peminjaman oleh tamu / instansi luar kampus.
-                    </p>
                 </div>
 
                 <a href="index.php?controller=adminBooking&action=manage"
@@ -312,7 +309,6 @@
         const jumlahAnggotaEl = document.getElementById('jumlah_anggota');
         const btnSubmit = document.getElementById('btn_submit');
 
-        // Slot jam statis untuk admin eksternal (silakan sesuaikan)
         const BASE_TIMES = [
             '08:00',
             '09:00',
