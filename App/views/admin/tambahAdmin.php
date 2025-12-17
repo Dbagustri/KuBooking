@@ -57,9 +57,11 @@ $status_aktif = $old['status_aktif']  ?? 'aktif';
                         Tambahkan akun baru untuk admin atau super admin.
                     </p>
                 </div>
+
                 <a href="index.php?controller=superAdmin&action=kelolaAdmin"
-                    class="inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium bg-gray-200 hover:bg-gray-300">
-                    ← Kembali
+                    class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium 
+                          border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 shadow-sm">
+                    Kembali
                 </a>
             </div>
 

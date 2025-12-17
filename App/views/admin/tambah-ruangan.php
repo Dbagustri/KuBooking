@@ -69,9 +69,9 @@
                     </div>
 
                     <a href="index.php?controller=admin&action=ruangan"
-                        class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium shadow-sm">
-                        <span class="text-lg">←</span>
-                        <span>Daftar Ruangan</span>
+                        class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium 
+                          border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 shadow-sm">
+                        Kembali
                     </a>
                 </div>
 

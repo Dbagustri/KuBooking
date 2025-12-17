@@ -6,9 +6,20 @@
 /** @var array       $fasilitas */
 /** @var bool        $buttonDisabled */
 /** @var string|null $jamOperasionalText */
+/** @var float|null  $avgRating */
+/** @var int|null    $ratingCount */
 
 $buttonDisabled     = $buttonDisabled ?? false;
 $jamOperasionalText = $jamOperasionalText ?? '';
+
+// default rating
+$avgRating   = isset($avgRating) ? (float)$avgRating : 5.0;
+$ratingCount = isset($ratingCount) ? (int)$ratingCount : 0;
+
+// render bintang (tanpa half-star)
+$filledStars = (int) floor($avgRating);
+if ($filledStars < 0) $filledStars = 0;
+if ($filledStars > 5) $filledStars = 5;
 
 ?>
 <!DOCTYPE html>
@@ -65,10 +76,22 @@ $jamOperasionalText = $jamOperasionalText ?? '';
               <?= htmlspecialchars($room['deskripsi'] ?? 'Ruang diskusi di perpustakaan utama'); ?>
             </p>
 
-            <!-- dummy rating -->
-            <div class="flex items-center space-x-1 text-yellow-400 text-xl">
-              <span>★</span><span>★</span><span>★</span><span>★</span>
-              <span class="text-gray-300">★</span>
+            <!-- Rating dari DB (default 5.0 kalau belum ada) -->
+            <div class="flex items-center gap-2">
+              <div class="flex items-center space-x-1 text-yellow-400 text-xl">
+                <?php for ($i = 1; $i <= 5; $i++): ?>
+                  <?php if ($i <= $filledStars): ?>
+                    <span>★</span>
+                  <?php else: ?>
+                    <span class="text-gray-300">★</span>
+                  <?php endif; ?>
+                <?php endfor; ?>
+              </div>
+
+              <div class="text-sm text-gray-600">
+                <span class="font-semibold text-gray-800"><?= number_format($avgRating, 1) ?></span>
+                <span class="text-gray-500">(<?= (int)$ratingCount ?>)</span>
+              </div>
             </div>
           </div>
         </div>

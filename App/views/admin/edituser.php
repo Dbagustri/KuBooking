@@ -75,8 +75,9 @@
                     </div>
 
                     <a href="index.php?controller=admin&action=anggota"
-                        class="inline-flex items-center gap-1 px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs sm:text-sm font-medium shadow-sm">
-                        ← Kembali
+                        class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium 
+                          border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 shadow-sm">
+                        Kembali
                     </a>
                 </div>
             </div>

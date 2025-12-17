@@ -53,14 +53,12 @@
 
                 <div class="flex flex-wrap gap-2">
                     <a href="index.php?controller=adminBooking&action=createInternal"
-                        class="inline-flex items-center px-4 py-2 rounded-lg text-sm font-semibold 
-                              bg-[#1e3a5f] text-white hover:bg-[#163152] shadow">
+                        class="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-semibold text-white bg-[#1e3a5f] hover:bg-[#163052] shadow">
                         Tambah Booking Internal
                     </a>
 
                     <a href="index.php?controller=adminBooking&action=createExternal"
-                        class="inline-flex items-center px-4 py-2 rounded-lg text-sm font-semibold 
-                              bg-emerald-600 text-white hover:bg-emerald-700 shadow">
+                        class="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-semibold text-white bg-emerald-600 text-white hover:bg-emerald-700 shadow">
                         Tambah Booking Eksternal
                     </a>
                 </div>

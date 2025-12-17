@@ -53,7 +53,7 @@
                 <a href="index.php?controller=adminBooking&action=manage"
                     class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium 
                           border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 shadow-sm">
-                    Kembali ke daftar booking
+                    Kembali
                 </a>
             </div>
 

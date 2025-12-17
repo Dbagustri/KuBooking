@@ -7,6 +7,8 @@ use App\Core\Auth;
 use App\Models\Room;
 use App\Models\BookingUser;
 use App\Models\Account;
+use App\Models\Feedback;
+
 
 class UserController extends Controller
 {
@@ -23,9 +25,10 @@ class UserController extends Controller
         $id = $_GET['id'] ?? null;
 
         // Validasi ID
-        if (!$id || !ctype_digit($id)) {
+        if (!$id || !ctype_digit((string)$id)) {
             return $this->redirect('index.php?controller=userBooking&action=home');
         }
+        $id = (int)$id;
 
         $roomModel = new Room();
 
@@ -53,15 +56,14 @@ class UserController extends Controller
 
         // Ubah slot yang bentrok jadi merah
         foreach ($booked as $b) {
-            $jam = date('H.i', strtotime($b['start_time'])) . "–" .
-                date('H.i', strtotime($b['end_time']));
+            $jam = date('H.i', strtotime($b['start_time'])) . "–" . date('H.i', strtotime($b['end_time']));
             if (isset($slotStatus[$jam])) {
                 $slotStatus[$jam] = 'red';
             }
         }
 
         // === AMBIL JADWAL RUANGAN & BIKIN TEKS JAM OPERASIONAL ===
-        $scheduleRows = $roomModel->getScheduleByRoom((int)$id);
+        $scheduleRows = $roomModel->getScheduleByRoom($id);
 
         $jamOperasionalText = '';
         if (!empty($scheduleRows)) {
@@ -69,36 +71,47 @@ class UserController extends Controller
             foreach ($scheduleRows as $row) {
                 $open  = substr($row['open_time'], 0, 5);
                 $close = substr($row['close_time'], 0, 5);
-                $line = $row['hari'] . ': ' . $open . '–' . $close;
+                $line  = $row['hari'] . ': ' . $open . '–' . $close;
+
                 if (!empty($row['break_start']) && !empty($row['break_end'])) {
                     $breakStart = substr($row['break_start'], 0, 5);
                     $breakEnd   = substr($row['break_end'], 0, 5);
-                    $line .= " (Istirahat {$breakStart}–{$breakEnd})";
+                    $line      .= " (Istirahat {$breakStart}–{$breakEnd})";
                 }
 
                 $lines[] = $line;
             }
-
             $jamOperasionalText = implode("\n", $lines);
         }
 
-        $bookingModel = new BookingUser();
-        $user         = Auth::user();
-        $idUser       = $user['id_account'] ?? null;
-        $booking_aktif = $idUser ? $bookingModel->getActiveBookingForUser($idUser) : null;
-        $unrated = $idUser ? $bookingModel->getUnratedFinishedBookingForUser($idUser) : null;
-        $canBook = Auth::isActive() && !$booking_aktif && !$unrated;
-        $buttonDisabled = (!$canBook || !empty($booking_aktif));
+        // Cek kondisi tombol booking
+        $bookingModel  = new BookingUser();
+        $user          = Auth::user();
+        $idUser        = $user['id_account'] ?? null;
+
+        $booking_aktif = $idUser ? $bookingModel->getActiveBookingForUser((int)$idUser) : null;
+        $unrated       = $idUser ? $bookingModel->getUnratedFinishedBookingForUser((int)$idUser) : null;
+
+        $canBook        = Auth::isActive() && !$booking_aktif && !$unrated;
+        $buttonDisabled = !$canBook;
+
+        // ✅ Rating dari DB (default 5.0 jika belum ada)
+        $feedbackModel  = new Feedback();
+        $ratingSummary  = $feedbackModel->getRoomRatingSummary($id);
 
         $this->view('user/detailroom', [
-            'room'           => $room,
-            'fasilitas'      => $fasilitas,
-            'slots'          => $slots,
-            'slotStatus'     => $slotStatus,
-            'buttonDisabled' => $buttonDisabled,
-            'booking_aktif'  => $booking_aktif,
-            'canBook'        => $canBook,
+            'room'              => $room,
+            'fasilitas'         => $fasilitas,
+            'slots'             => $slots,
+            'slotStatus'        => $slotStatus,
+            'buttonDisabled'    => $buttonDisabled,
+            'booking_aktif'     => $booking_aktif,
+            'canBook'           => $canBook,
             'jamOperasionalText' => $jamOperasionalText,
+
+            // ✅ rating props untuk view
+            'avgRating'         => $ratingSummary['avg_rating'],
+            'ratingCount'       => $ratingSummary['rating_count'],
         ]);
     }
 

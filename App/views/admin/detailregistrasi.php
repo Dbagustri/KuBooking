@@ -99,8 +99,9 @@ $isFinal = in_array($status, ['approved', 'rejected'], true);
                 </h1>
 
                 <a href="index.php?controller=admin&action=verifikasiUser"
-                    class="px-4 py-2 rounded-lg bg-gray-300 hover:bg-gray-400 text-gray-800 text-sm font-semibold">
-                    Kembali ke Verifikasi
+                    class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium 
+                          border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 shadow-sm">
+                    Kembali
                 </a>
             </div>
 

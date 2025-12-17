@@ -109,4 +109,37 @@ class Feedback extends Model
         $stmt = self::$db->prepare($sql);
         return $stmt->execute([':id' => $id]);
     }
+    // App/Models/Feedback.php
+    public function getRoomRatingSummary(int $idRuangan): array
+    {
+        $sql = "
+            SELECT
+                AVG(f.rating) AS avg_rating,
+                COUNT(f.id_feedback) AS rating_count
+            FROM Feedback f
+            JOIN Bookings b ON b.id_bookings = f.id_bookings
+            WHERE b.id_ruangan = :id_ruangan
+        ";
+
+        $stmt = self::$db->prepare($sql);
+        $stmt->execute(['id_ruangan' => $idRuangan]);
+        $row = $stmt->fetch();
+
+        $count = (int)($row['rating_count'] ?? 0);
+
+        // Default 5.0 kalau belum ada rating
+        if ($count <= 0) {
+            return [
+                'avg_rating'   => 5.0,
+                'rating_count' => 0,
+            ];
+        }
+
+        $avg = (float)($row['avg_rating'] ?? 0);
+
+        return [
+            'avg_rating'   => round($avg, 1),
+            'rating_count' => $count,
+        ];
+    }
 }

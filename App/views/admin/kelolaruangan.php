@@ -55,7 +55,7 @@
                 <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
                     <a href="index.php?controller=admin&action=tambahRuangan"
                         class="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-semibold text-white bg-[#1e3a5f] hover:bg-[#163052] shadow">
-                        + Tambah Ruangan
+                        Tambah Ruangan
                     </a>
 
                     <form action="index.php?controller=admin&action=toggleAllRooms"

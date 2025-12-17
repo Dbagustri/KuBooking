@@ -1,13 +1,15 @@
 <?php
-// Pastikan variabel ada biar nggak notice
-$list         = $list         ?? [];
-$current_page = (int)($current_page ?? 1);
-$total_pages  = (int)($total_pages ?? 1);
-$filter       = (string)($filter ?? 'pending'); // default sesuai controller kamu
-$search       = (string)($search ?? '');
+// =================== SAFE DEFAULTS (JANGAN STUCK) ===================
+$list        = $list ?? [];
+$total_pages = isset($total_pages) ? (int)$total_pages : 1;
+if ($total_pages < 1) $total_pages = 1;
 
-if ($current_page < 1) $current_page = 1;
-if ($total_pages < 1)  $total_pages  = 1;
+// filter & search (prioritas dari controller, fallback GET)
+$filter = isset($filter) ? (string)$filter : (string)($_GET['filter'] ?? 'pending');
+$search = isset($search) ? (string)$search : (string)trim($_GET['q'] ?? '');
+
+// ✅ INI KUNCI: current page selalu ikut URL (?page=...)
+$current_page = max(1, (int)($_GET['page'] ?? ($current_page ?? 1)));
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -15,6 +17,7 @@ if ($total_pages < 1)  $total_pages  = 1;
 <head>
     <meta charset="UTF-8">
     <title>Verifikasi User | Kubooking</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
@@ -23,39 +26,34 @@ if ($total_pages < 1)  $total_pages  = 1;
     <!-- SIDEBAR -->
     <?php
     $sidebarPath = __DIR__ . '/../layout/sidebar.php';
-    if (file_exists($sidebarPath)) {
-        include $sidebarPath;
-    }
+    if (file_exists($sidebarPath)) include $sidebarPath;
     ?>
 
     <!-- CONTENT -->
     <div class="flex-1 flex flex-col h-screen overflow-y-auto">
+
         <?php
         $flashPath = __DIR__ . '/../layout/flash.php';
-        if (file_exists($flashPath)) {
-            include $flashPath;
-        }
+        if (file_exists($flashPath)) include $flashPath;
         ?>
-        <!-- NAVBAR -->
+
         <div class="m-4">
             <?php
             $navPath = __DIR__ . '/../layout/nav-admin.php';
-            if (file_exists($navPath)) {
-                include $navPath;
-            }
+            if (file_exists($navPath)) include $navPath;
             ?>
         </div>
 
         <div class="px-8 pb-10 space-y-6">
             <h1 class="text-2xl font-bold text-[#1e3a5f]">Verifikasi User</h1>
 
-            <!-- FILTER & SEARCH (satu form biar selaras) -->
+            <!-- FILTER & SEARCH -->
             <form id="verifForm" method="get" action="index.php"
                 class="flex flex-col md:flex-row md:items-center md:space-x-4 space-y-3 md:space-y-0">
 
                 <input type="hidden" name="controller" value="admin">
                 <input type="hidden" name="action" value="verifikasiUser">
-                <input type="hidden" name="page" value="1"> <!-- reset saat filter/search submit -->
+                <input type="hidden" name="page" value="1">
 
                 <!-- FILTER (auto submit) -->
                 <div class="flex items-center space-x-2">
@@ -68,7 +66,7 @@ if ($total_pages < 1)  $total_pages  = 1;
                     </select>
                 </div>
 
-                <!-- SEARCH (butuh tombol) -->
+                <!-- SEARCH -->
                 <div class="flex flex-1 items-center">
                     <input type="text" name="q" placeholder="Cari nama / email..."
                         value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>"
@@ -81,6 +79,7 @@ if ($total_pages < 1)  $total_pages  = 1;
                 </div>
             </form>
 
+            <!-- TABLE -->
             <div class="overflow-x-auto">
                 <table class="min-w-full border-collapse bg-white shadow rounded-lg overflow-hidden">
                     <thead>
@@ -110,7 +109,6 @@ if ($total_pages < 1)  $total_pages  = 1;
                                     $badgeClass = 'bg-red-100 text-red-700';
                                 }
 
-                                // kalau status final, disable approve/reject
                                 $isFinal = in_array($status, ['approved', 'rejected'], true);
                                 ?>
                                 <tr class="<?= $i % 2 === 0 ? 'bg-gray-50' : 'bg-gray-100' ?> text-sm">
@@ -201,7 +199,7 @@ if ($total_pages < 1)  $total_pages  = 1;
                 </table>
             </div>
 
-            <!-- PAGINATION (pakai komponen yang kamu punya) -->
+            <!-- PAGINATION (layout/pagination.php kamu TETAP) -->
             <?php
             $pagination = [
                 'pageKey'     => 'page',
@@ -221,7 +219,6 @@ if ($total_pages < 1)  $total_pages  = 1;
     </div>
 
     <script>
-        // Filter auto jalan, search tetap lewat tombol submit
         document.getElementById('filterSelect')?.addEventListener('change', function() {
             const form = document.getElementById('verifForm');
             const pageInput = form?.querySelector('input[name="page"]');

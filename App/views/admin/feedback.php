@@ -26,10 +26,8 @@
         </div>
 
         <?php
-        // Normalisasi variabel (fallback aman + sinkron dengan GET)
         $feedbacks    = $feedbacks    ?? [];
         $rooms        = $rooms        ?? [];
-
         $search       = $search       ?? (trim($_GET['q'] ?? ''));
         $roomFilter   = $roomFilter   ?? ($_GET['room'] ?? 'all');
         $ratingFilter = $ratingFilter ?? ($_GET['rating'] ?? 'all');
@@ -55,7 +53,7 @@
             <!-- FILTER & SEARCH -->
             <div class="flex flex-col lg:flex-row lg:items-center lg:space-x-4 space-y-3 lg:space-y-0 mt-2">
 
-                <!-- FILTER (AUTO SUBMIT) -->
+                <!-- FILTER -->
                 <form id="filterForm" method="get" class="flex flex-col lg:flex-row lg:items-center lg:space-x-4 space-y-3 lg:space-y-0 w-full">
                     <input type="hidden" name="controller" value="userFeedback">
                     <input type="hidden" name="action" value="adminIndex">

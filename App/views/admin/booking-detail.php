@@ -160,7 +160,8 @@
                 <h1 class="text-2xl font-bold text-[#1e3a5f]">Detail Booking</h1>
 
                 <a href="index.php?controller=adminBooking&action=manage"
-                    class="px-4 py-2 rounded-lg bg-gray-300 hover:bg-gray-400 text-gray-800 text-sm font-semibold">
+                    class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium 
+                          border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 shadow-sm">
                     Kembali
                 </a>
             </div>

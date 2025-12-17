@@ -52,8 +52,7 @@
                 </div>
 
                 <a href="index.php?controller=admin&action=tambahAnggota"
-                    class="inline-flex items-center px-4 py-2 rounded-lg text-sm font-semibold 
-                          bg-[#1e3a5f] text-white hover:bg-[#163152] shadow">
+                    class="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-semibold text-white bg-[#1e3a5f] hover:bg-[#163052] shadow">
                     Tambah Anggota
                 </a>
             </div>

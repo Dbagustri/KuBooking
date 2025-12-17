@@ -951,8 +951,8 @@ class AdminBookingController extends Controller
                 );
             }
 
-            $count = $this->bookingAdminModel->cancelBookingsByDate($tanggal);
-
+            $cancelled = $this->bookingAdminModel->cancelBookingsByDate($tanggal);
+            $count     = count($cancelled);
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=manage',
                 "Penutupan perpustakaan berhasil. {$count} booking pada tanggal {$tanggal} dibatalkan."
@@ -961,6 +961,7 @@ class AdminBookingController extends Controller
 
         $this->view('admin/close-date', []);
     }
+
 
     public function processReschedule()
     {

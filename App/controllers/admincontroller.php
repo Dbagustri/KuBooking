@@ -204,13 +204,20 @@ class AdminController extends Controller
     public function verifikasiUser()
     {
         Auth::requireRole(['admin', 'super_admin']);
+
         $page    = max(1, (int)($_GET['page'] ?? 1));
         $perPage = self::PER_PAGE;
-        $filter = $_GET['filter'] ?? 'pending';
-        $search = trim($_GET['q'] ?? '');
+
+        $filter  = $_GET['filter'] ?? 'pending';
+        $search  = trim($_GET['q'] ?? '');
         $data = $this->registrasiModel->getPendingUsers($page, $filter, $search, $perPage);
+        $data['current_page'] = $page;
+        $data['filter']       = $filter;
+        $data['search']       = $search;
+
         $this->view('admin/verifikasiuser', $data);
     }
+
 
 
     public function ruangan()
