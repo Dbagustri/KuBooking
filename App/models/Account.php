@@ -38,13 +38,14 @@ class Account extends Model
     }
     public function countActive()
     {
-        $sql = "SELECT COUNT(*) AS total
-                FROM " . self::$table . "
-                WHERE status_aktif = 'aktif'";
-        $stmt = self::$db->query($sql);
-        $row  = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (int) ($row['total'] ?? 0);
+        $stmt = self::$db->query(
+            "SELECT f_user_aktif() AS total"
+        );
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        return (int)($row['total'] ?? 0);
     }
+
+
     public function createFromRegistrasi(array $data)
     {
         $sql = "INSERT INTO " . self::$table . " 
@@ -101,14 +102,11 @@ class Account extends Model
             $params[':search'] = "%{$search}%";
         }
 
-        // COUNT dulu
         $sqlCount  = "SELECT COUNT(*) FROM " . self::$table . " {$where}";
         $stmtCount = self::$db->prepare($sqlCount);
         $stmtCount->execute($params);
         $totalRows  = (int)$stmtCount->fetchColumn();
         $totalPages = max(1, (int)ceil($totalRows / $limit));
-
-        // clamp page biar gak lewat
         if ($page > $totalPages) $page = $totalPages;
 
         $offset = ($page - 1) * $limit;

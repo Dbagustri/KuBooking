@@ -1,13 +1,16 @@
 <!doctype html>
 <html lang="id">
+
 <head>
-<meta charset="utf-8">
-<title><?= $title ?? 'Roomify' ?></title>
-<script src="https://cdn.tailwindcss.com"></script>
+    <meta charset="utf-8">
+    <title><?= $title ?? 'KuBooking' ?></title>
+    <link rel="stylesheet" href="/kubooking/public/src/output.css">
 </head>
+
 <body class="bg-gray-50">
-<?= $content ?? '' ?>
+    <?= $content ?? '' ?>
 </body>
+
 </html>
 <?php if (!empty($_SESSION['flash_message'])): ?>
     <div class="p-3 mb-4 text-white rounded 

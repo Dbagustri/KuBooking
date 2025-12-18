@@ -5,8 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Kubooking | Peminjaman Ruangan</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="/kubooking/public/src/output.css">
 </head>
 
 <body class="font-sans text-gray-800 bg-gray-50">
@@ -61,7 +60,7 @@
         <?php
         // di landing, tombol booking boleh kita anggap non-aktif (user belum login)
         // kalau fungsi renderRoomCards punya parameter $buttonDisabled, kita kirim true.
-        if (function_exists('renderRoomCards')) {
+        if (function_exists(function: 'renderRoomCards')) {
           // tampilkan hanya 3 (jaga-jaga kalau controller kirim lebih banyak)
           $featured = array_slice($rooms, 0, 3);
           renderRoomCards($featured, true);

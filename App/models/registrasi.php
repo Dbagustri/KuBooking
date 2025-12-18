@@ -110,14 +110,11 @@ class Registrasi extends Model
 
     public function countPendingToday()
     {
-        $sql = "SELECT COUNT(*) AS total
-                FROM " . self::$table . "
-                WHERE status = 'pending'
-                  AND DATE(created_at) = CURDATE()";
-        $stmt = self::$db->query($sql);
-        $row  = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (int) ($row['total'] ?? 0);
+        $stmt = self::$db->query("SELECT f_registrasi_pending_hari_ini() AS total");
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (int)($row['total'] ?? 0);
     }
+
     public function getPendingUsers($page, $filter, $search, $perPage = 5)
     {
         // pastikan aman

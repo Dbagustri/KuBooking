@@ -38,7 +38,7 @@ function navLink(string $label, string $href, bool $active = false)
     }
     ?>
     <a href="<?= $homeUrl ?>" class="text-xl md:text-2xl font-bold">
-      Roomify
+      KuBooking
     </a>
 
     <!-- TENGAH: MENU -->

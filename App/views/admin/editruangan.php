@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Edit Ruangan | Kubooking</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/kubooking/public/src/output.css">
 </head>
 
 <body class="bg-[#f2f7fc] text-gray-800 flex min-h-screen">
@@ -39,10 +39,8 @@
         $status    = $room['status_operasional'] ?? 'nonaktif';
         $foto      = $room['foto_ruangan']       ?? '';
 
-        // Jadwal ruangan (optional)
+        // Jadwal ruangan
         $schedule = isset($schedule) && is_array($schedule) ? $schedule : [];
-
-        // Fasilitas (optional)
         $facilities = isset($facilities) && is_array($facilities) ? $facilities : [];
         $selectedFacilities = isset($selectedFacilities) && is_array($selectedFacilities) ? $selectedFacilities : [];
 

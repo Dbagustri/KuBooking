@@ -8,7 +8,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Buat Booking Eksternal | Kubooking</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/kubooking/public/src/output.css">
 </head>
 
 <body class="bg-[#f2f7fc] text-gray-800 flex">

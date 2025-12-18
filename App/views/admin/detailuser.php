@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Detail User | Kubooking</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/kubooking/public/src/output.css">
 </head>
 
 <body class="bg-[#edf3fb] text-gray-800 flex min-h-screen">

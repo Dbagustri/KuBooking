@@ -19,13 +19,13 @@ class Room extends Model
      */
     public function countActive()
     {
-        $sql = "SELECT COUNT(*) AS total
-                FROM " . self::$table . "
-                WHERE status_operasional = 'aktif'";
-        $stmt = self::$db->query($sql);
-        $row  = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (int) ($row['total'] ?? 0);
+        $stmt = self::$db->query(
+            "SELECT f_ruangan_operasional_aktif() AS total"
+        );
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        return (int)($row['total'] ?? 0);
     }
+
 
     /**
      * Ambil detail ruangan berdasarkan id

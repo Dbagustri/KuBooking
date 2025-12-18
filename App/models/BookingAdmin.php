@@ -8,13 +8,13 @@ class BookingAdmin extends BookingBase
 {
     public function countToday()
     {
-        $sql = "SELECT COUNT(*) AS total 
-                FROM " . self::$table . "
-                WHERE tanggal = CURDATE()";
-        $stmt = self::$db->query($sql);
-        $row  = $stmt->fetch(PDO::FETCH_ASSOC);
+        $stmt = self::$db->query(
+            "SELECT f_booking_hari_ini() AS total"
+        );
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
         return (int)($row['total'] ?? 0);
     }
+
     public function getPendingForDashboard($limit = 10)
     {
         $sql = "

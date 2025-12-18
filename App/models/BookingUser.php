@@ -187,7 +187,6 @@ class BookingUser extends BookingBase
             'kode_kelompok'   => $data['kode_kelompok'],
             'start_time'      => $data['start_time'],
             'end_time'        => $data['end_time'],
-            // mulai dari 0, lalu PJ & anggota lain dimasukkan via addMember()
             'jumlah_anggota'  => 0,
             'is_external'     => 0,
             'tanggal'         => $data['tanggal'],
