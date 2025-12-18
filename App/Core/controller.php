@@ -31,7 +31,7 @@ class Controller
         }
 
         $_SESSION['flash_message'] = [
-            'type' => $type,   // 'success' atau 'error'
+            'type' => $type,
             'text' => $message
         ];
 
@@ -45,8 +45,6 @@ class Controller
         $day = (int)date('N', strtotime($tanggal));
         return $day >= 6;
     }
-
-
     protected function weekendMessage(): string
     {
         return 'Peminjaman tidak tersedia pada Sabtu/Minggu. Silakan pilih hari kerja (Senin–Jumat).';

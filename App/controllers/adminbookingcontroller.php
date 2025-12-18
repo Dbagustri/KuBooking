@@ -30,6 +30,7 @@ class AdminBookingController extends Controller
     /** @var NotificationService */
     private $notif;
 
+    /** Inisialisasi semua model & service yang dipakai controller admin booking. */
     public function __construct()
     {
         $this->bookingAdminModel      = new BookingAdmin();
@@ -40,6 +41,8 @@ class AdminBookingController extends Controller
         $this->bookingUserModel       = new BookingUser();
         $this->notif = new NotificationService();
     }
+
+    //kirim notifikasi email menggunakan jenis template dan data placeholder.//
     private function sendNotifToUserById(int $userId, string $jenis, array $data = []): bool
     {
         $user = $this->accountModel->findById($userId);
@@ -56,21 +59,15 @@ class AdminBookingController extends Controller
             error_log("[NOTIF] Email invalid/empty. userId={$userId}, jenis={$jenis}, email={$toEmail}");
             return false;
         }
-
-        // pastikan template punya {{nama}}
         $data = array_merge(['nama' => $toName], $data);
-
         $ok = $this->notif->sendByJenis($jenis, $toEmail, $toName, $data);
-
         if (!$ok) {
             error_log("[NOTIF] Send failed. userId={$userId}, jenis={$jenis}, email={$toEmail}");
         }
-
         return $ok;
     }
 
-
-
+    // auto-cancel terlambat, pagination, filter status/tipe, lalu render view daftar booking. //
     public function manage()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -78,7 +75,6 @@ class AdminBookingController extends Controller
         $cancelled = $this->bookingAdminModel->autoCancelLateBookings();
 
         foreach ($cancelled as $b) {
-            // kirim ke PJ kalau ada email
             if (!empty($b['id_pj']) && !empty($b['email'])) {
                 $toEmail = (string)$b['email'];
                 $toName  = (string)($b['nama'] ?? 'User');
@@ -143,8 +139,7 @@ class AdminBookingController extends Controller
         ]);
     }
 
-
-
+    //Detail booking untuk admin: validasi id, ambil detail + anggota, lalu render view detail.//
     public function detail()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -176,6 +171,7 @@ class AdminBookingController extends Controller
         ]);
     }
 
+    //booking internal oleh admin //
     public function createInternal()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -196,7 +192,6 @@ class AdminBookingController extends Controller
         $keperluan  = $this->input('keperluan');
         $members    = $_POST['members'] ?? [];
         $pjIdInput  = $this->input('pj_id_user');
-        // ❌ Blok Sabtu/Minggu
         if ($this->isWeekend($tanggal)) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=createInternal',
@@ -204,8 +199,6 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-
-        // ====== VALIDASI DASAR ======
         if (
             !$idRuangan ||
             !$tanggal ||
@@ -219,8 +212,6 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-
-        // Durasi maksimal 3 jam seperti user biasa
         if ($durasi < 1 || $durasi > 3) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=createInternal',
@@ -228,8 +219,6 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-
-        // Minimal 1 anggota
         if (empty($members) || !is_array($members)) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=createInternal',
@@ -246,8 +235,6 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-
-        // ====== VALIDASI WAKTU (TIDAK BOLEH DI MASA LALU) ======
         $today = date('Y-m-d');
         $now   = date('Y-m-d H:i:s');
 
@@ -269,8 +256,6 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-
-        // ====== CEK BENTROK DENGAN BOOKING LAIN ======
         if ($this->bookingUserModel->isBentrok((int)$idRuangan, $start, $end)) {
             return $this->redirectWithMessage(
                 'index.php?controller=adminBooking&action=createInternal',
@@ -278,8 +263,6 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-
-        // ====== VALIDASI ANGGOTA ======
         $kapasitasMin = (int)($room['kapasitas_min'] ?? 0);
         $kapasitasMax = (int)($room['kapasitas_max'] ?? 0);
 
@@ -298,8 +281,6 @@ class AdminBookingController extends Controller
                     'error'
                 );
             }
-
-            // Tidak boleh punya booking aktif
             $active = $this->bookingUserModel->getActiveBookingForUser($mid);
             if ($active) {
                 return $this->redirectWithMessage(
@@ -337,8 +318,6 @@ class AdminBookingController extends Controller
                 'error'
             );
         }
-
-        // ====== TENTUKAN PJ (ANGGOTA PERTAMA DEFAULT) ======
         $pjIdUser = (int)($pjIdInput ?? 0);
         if (!$pjIdUser || !in_array($pjIdUser, $validMembers, true)) {
             $pjIdUser = $validMembers[0];
@@ -370,6 +349,7 @@ class AdminBookingController extends Controller
         );
     }
 
+    //buat booking eksternal/guest oleh admin//
     public function createExternal()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -493,8 +473,6 @@ class AdminBookingController extends Controller
                     'error'
                 );
             }
-
-            // upload surat izin
             $suratIzinPath = null;
             if (!empty($_FILES['surat_izin']) && $_FILES['surat_izin']['error'] !== UPLOAD_ERR_NO_FILE) {
                 if ($_FILES['surat_izin']['error'] !== UPLOAD_ERR_OK) {
@@ -579,6 +557,7 @@ class AdminBookingController extends Controller
         ]);
     }
 
+    // edit booking + proses update //
     public function edit()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -703,6 +682,7 @@ class AdminBookingController extends Controller
         );
     }
 
+    //Hapus booking //
     public function delete()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -725,6 +705,7 @@ class AdminBookingController extends Controller
         );
     }
 
+    //booking (approved) jika status masih memungkinkan//
     public function approve()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -758,7 +739,6 @@ class AdminBookingController extends Controller
         }
 
         $this->bookingAdminModel->addStatus($idBooking, 'approved');
-        // Ambil data booking untuk isi template
         $booking = $this->bookingAdminModel->findWithRoom($idBooking);
         if ($booking && !empty($booking['id_pj'])) {
             $start = isset($booking['start_time']) ? strtotime($booking['start_time']) : null;
@@ -779,6 +759,7 @@ class AdminBookingController extends Controller
         );
     }
 
+    // Tolak booking //
     public function reject()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -828,6 +809,7 @@ class AdminBookingController extends Controller
         );
     }
 
+    //Mulai booking jika status sudah approved dan waktu sudah masuk//
     public function start()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -891,6 +873,7 @@ class AdminBookingController extends Controller
         );
     }
 
+    // Tandai booking selesai (selesai),//
     public function complete()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -936,6 +919,7 @@ class AdminBookingController extends Controller
         );
     }
 
+    // batalkan booking pada tanggal //
     public function closeDate()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -962,7 +946,7 @@ class AdminBookingController extends Controller
         $this->view('admin/close-date', []);
     }
 
-
+    //detail permintaan reschedule //
     public function processReschedule()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -1017,6 +1001,7 @@ class AdminBookingController extends Controller
         ]);
     }
 
+    // Setujui reschedule//
     public function approveReschedule()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -1048,9 +1033,7 @@ class AdminBookingController extends Controller
             if (!$booking) {
                 error_log("[NOTIF] reschedule_approved: booking not found. idBooking={$idBooking}");
             } else {
-                // fallback kalau key beda
                 $idPj = (int)($booking['id_pj'] ?? $booking['pj_id_user'] ?? $booking['id_user_pj'] ?? 0);
-
                 if ($idPj <= 0) {
                     error_log("[NOTIF] reschedule_approved: id_pj empty. idBooking={$idBooking}. keys=" . implode(',', array_keys($booking)));
                 } else {
@@ -1086,6 +1069,7 @@ class AdminBookingController extends Controller
         );
     }
 
+    // Tolak reschedule//
     public function rejectReschedule()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -1112,8 +1096,6 @@ class AdminBookingController extends Controller
         }
 
         $idBooking = (int)($result['id_booking'] ?? 0);
-
-        // ===== NOTIF (tidak mengganggu flow utama) =====
         if ($idBooking > 0) {
             $booking = $this->bookingAdminModel->findWithRoom($idBooking);
 

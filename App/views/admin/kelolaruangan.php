@@ -161,61 +161,18 @@
                                         </span>
                                     </td>
 
+                                    <!-- AKSI: global floating menu -->
                                     <td class="px-4 py-3 text-center">
-                                        <div class="relative inline-block text-left">
-                                            <button type="button"
-                                                onclick="toggleMenu('room-<?= $id ?>')"
-                                                class="inline-flex justify-center w-8 h-8 rounded-full hover:bg-gray-200 text-xl leading-none">
-                                                &#8226;&#8226;&#8226;
-                                            </button>
-
-                                            <div id="room-<?= $id ?>"
-                                                class="hidden origin-top-right absolute right-0 mt-2 w-44 rounded-md shadow-lg bg-white ring-1 ring-black/5 z-20 text-left text-sm">
-                                                <a href="index.php?controller=admin&action=detailRuangan&id=<?= $id ?>"
-                                                    class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
-                                                    Detail
-                                                </a>
-
-                                                <a href="index.php?controller=admin&action=editRoom&id=<?= $id ?>"
-                                                    class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
-                                                    Edit
-                                                </a>
-
-                                                <?php if ($status === 'aktif'): ?>
-                                                    <form action="index.php?controller=admin&action=setRoomStatus"
-                                                        method="POST"
-                                                        onsubmit="return confirm('Yakin ingin menonaktifkan ruangan ini?');">
-                                                        <input type="hidden" name="id_ruangan" value="<?= $id ?>">
-                                                        <input type="hidden" name="status" value="nonaktif">
-                                                        <button type="submit"
-                                                            class="w-full text-left px-4 py-2 text-red-700 hover:bg-red-50">
-                                                            Nonaktifkan
-                                                        </button>
-                                                    </form>
-                                                <?php else: ?>
-                                                    <form action="index.php?controller=admin&action=setRoomStatus"
-                                                        method="POST"
-                                                        onsubmit="return confirm('Aktifkan kembali ruangan ini?');">
-                                                        <input type="hidden" name="id_ruangan" value="<?= $id ?>">
-                                                        <input type="hidden" name="status" value="aktif">
-                                                        <button type="submit"
-                                                            class="w-full text-left px-4 py-2 text-green-700 hover:bg-green-50">
-                                                            Aktifkan
-                                                        </button>
-                                                    </form>
-                                                <?php endif; ?>
-
-                                                <form action="index.php?controller=admin&action=deleteRuangan"
-                                                    method="POST"
-                                                    onsubmit="return confirm('Yakin ingin menghapus ruangan ini?');">
-                                                    <input type="hidden" name="id_ruangan" value="<?= $id ?>">
-                                                    <button type="submit"
-                                                        class="w-full text-left px-4 py-2 border-t text-red-700 hover:bg-red-50">
-                                                        Hapus
-                                                    </button>
-                                                </form>
-                                            </div>
-                                        </div>
+                                        <button type="button"
+                                            class="inline-flex w-8 h-8 items-center justify-center rounded-full
+                                                   hover:bg-gray-200 focus:outline-none focus:ring-2
+                                                   focus:ring-offset-2 focus:ring-slate-400"
+                                            onclick="openActionMenu(event, <?= $id ?>, '<?= htmlspecialchars($status, ENT_QUOTES, 'UTF-8') ?>')">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
+                                                fill="currentColor" class="w-4 h-4 text-gray-600">
+                                                <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
+                                            </svg>
+                                        </button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -259,23 +216,112 @@
         </div>
     </div>
 
-    <script>
-        function toggleMenu(id) {
-            const menu = document.getElementById(id);
-            if (!menu) return;
-            const isHidden = menu.classList.contains('hidden');
+    <!-- GLOBAL ACTION MENU (floating, tidak ketutupan overflow table/card) -->
+    <div id="actionMenu"
+        class="hidden fixed z-[9999] w-44 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+        <div class="py-1 text-sm text-gray-700" id="actionMenuContent"></div>
+    </div>
 
-            document.querySelectorAll("[id^='room-']").forEach(m => m.classList.add('hidden'));
-            if (isHidden) menu.classList.remove('hidden');
+    <script>
+        const menuEl = document.getElementById('actionMenu');
+        const contentEl = document.getElementById('actionMenuContent');
+        let activeRoomId = null;
+
+        function buildMenuHTML(id, statusOperasional) {
+            const detailUrl = `index.php?controller=admin&action=detailRuangan&id=${id}`;
+            const editUrl = `index.php?controller=admin&action=editRoom&id=${id}`;
+
+            const toggleForm = (statusOperasional === 'aktif') ?
+                `
+                <form action="index.php?controller=admin&action=setRoomStatus"
+                      method="POST"
+                      onsubmit="return confirm('Yakin ingin menonaktifkan ruangan ini?');">
+                    <input type="hidden" name="id_ruangan" value="${id}">
+                    <input type="hidden" name="status" value="nonaktif">
+                    <button type="submit"
+                        class="w-full text-left px-4 py-2 text-red-700 hover:bg-red-50">
+                        Nonaktifkan
+                    </button>
+                </form>
+                ` :
+                `
+                <form action="index.php?controller=admin&action=setRoomStatus"
+                      method="POST"
+                      onsubmit="return confirm('Aktifkan kembali ruangan ini?');">
+                    <input type="hidden" name="id_ruangan" value="${id}">
+                    <input type="hidden" name="status" value="aktif">
+                    <button type="submit"
+                        class="w-full text-left px-4 py-2 text-green-700 hover:bg-green-50">
+                        Aktifkan
+                    </button>
+                </form>
+                `;
+
+            return `
+                <a href="${detailUrl}" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Detail</a>
+                <a href="${editUrl}" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Edit</a>
+                ${toggleForm}
+                <form action="index.php?controller=admin&action=deleteRuangan"
+                      method="POST"
+                      onsubmit="return confirm('Yakin ingin menghapus ruangan ini?');">
+                    <input type="hidden" name="id_ruangan" value="${id}">
+                    <button type="submit"
+                        class="w-full text-left px-4 py-2 border-t text-red-700 hover:bg-red-50">
+                        Hapus
+                    </button>
+                </form>
+            `;
         }
 
+        function openActionMenu(e, id, statusOperasional) {
+            e.stopPropagation();
+
+            // toggle: klik tombol yang sama lagi -> tutup
+            if (!menuEl.classList.contains('hidden') && activeRoomId === id) {
+                closeActionMenu();
+                return;
+            }
+
+            activeRoomId = id;
+            contentEl.innerHTML = buildMenuHTML(id, statusOperasional);
+
+            const btnRect = e.currentTarget.getBoundingClientRect();
+            const menuWidth = 176; // w-44
+
+            let left = btnRect.right - menuWidth;
+            let top = btnRect.bottom + 8;
+
+            left = Math.max(8, Math.min(left, window.innerWidth - menuWidth - 8));
+
+            const estimatedHeight = 190;
+            if (top + estimatedHeight > window.innerHeight - 8) {
+                top = btnRect.top - estimatedHeight - 8;
+            }
+            top = Math.max(8, top);
+
+            menuEl.style.left = left + 'px';
+            menuEl.style.top = top + 'px';
+
+            menuEl.classList.remove('hidden');
+        }
+
+        function closeActionMenu() {
+            menuEl.classList.add('hidden');
+            activeRoomId = null;
+        }
+
+        // klik di luar = tutup
         document.addEventListener('click', function(e) {
-            document.querySelectorAll("[id^='room-']").forEach(menu => {
-                const btn = menu.previousElementSibling;
-                if (!menu.contains(e.target) && btn && !btn.contains(e.target)) {
-                    menu.classList.add('hidden');
-                }
-            });
+            if (!e.target.closest('#actionMenu')) closeActionMenu();
+        });
+
+        // scroll/resize = tutup (biar posisinya nggak nyasar)
+        window.addEventListener('scroll', closeActionMenu, true);
+        window.addEventListener('resize', closeActionMenu);
+
+        // ESC = tutup
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeActionMenu();
         });
     </script>
 </body>

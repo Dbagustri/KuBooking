@@ -29,7 +29,12 @@
     $role        = $user['role'] ?? 'mahasiswa';
     $statusAktif = $user['status_aktif'] ?? 'aktif';
     ?>
-
+    <?php
+    $flashPath = __DIR__ . '/../layout/flash.php';
+    if (file_exists($flashPath)) {
+        include $flashPath;
+    }
+    ?>
     <div class="max-w-6xl mx-auto mt-8 px-4 pb-10 space-y-6">
 
         <!-- Tombol kembali -->

@@ -27,7 +27,12 @@
     require $roomCardPath;
   }
   ?>
-
+  <?php
+  $flashPath = __DIR__ . '/../layout/flash.php';
+  if (file_exists($flashPath)) {
+    include $flashPath;
+  }
+  ?>
   <!-- HERO -->
   <section class="relative bg-cover bg-center h-[420px]"
     style="background-image: url('img/default-room.jpg');">

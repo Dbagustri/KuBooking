@@ -40,7 +40,12 @@ if ($filledStars > 5) $filledStars = 5;
     include $navbarPath;
   }
   ?>
-
+  <?php
+  $flashPath = __DIR__ . '/../layout/flash.php';
+  if (file_exists($flashPath)) {
+    include $flashPath;
+  }
+  ?>
   <div class="min-h-screen px-8 py-6">
 
     <!-- Back -->
@@ -177,77 +182,55 @@ if ($filledStars > 5) $filledStars = 5;
             </div>
           </div>
 
-          <!-- Ketersediaan Hari ini -->
-          <div class="pt-3 border-t mt-3">
-            <p class="font-semibold text-sm mb-1">Ketersediaan Hari ini</p>
-            <p class="text-xs text-gray-600 mb-3">
-              Hijau: Tersedia &nbsp;&nbsp; Merah: Terisi
-            </p>
 
-            <div class="flex flex-wrap gap-2">
-              <?php if (!empty($slots)): ?>
-                <?php foreach ($slots as $slot):
-                  $colorClass = (isset($slotStatus[$slot]) && $slotStatus[$slot] === 'red')
-                    ? 'bg-red-100 text-red-600 border-red-300'
-                    : 'bg-green-100 text-green-700 border-green-300';
-                ?>
-                  <span class="px-3 py-1 rounded-full text-xs border <?= $colorClass; ?>">
-                    <?= htmlspecialchars($slot); ?>
-                  </span>
+          <!-- Fasilitas Ruangan -->
+          <div class="bg-white rounded-3xl shadow-md p-6 space-y-3">
+            <h2 class="text-lg font-semibold text-gray-900">Fasilitas Ruangan</h2>
+
+            <?php if (!empty($fasilitas)): ?>
+              <ul class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-700">
+                <?php foreach ($fasilitas as $fas): ?>
+                  <li class="flex items-center space-x-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
+                    <span>
+                      <?= htmlspecialchars(is_array($fas) && isset($fas['nama_fasilitas']) ? $fas['nama_fasilitas'] : $fas); ?>
+                    </span>
+                  </li>
                 <?php endforeach; ?>
-              <?php else: ?>
-                <span class="text-xs text-gray-500">Belum ada data ketersediaan.</span>
-              <?php endif; ?>
+              </ul>
+            <?php else: ?>
+              <p class="text-sm text-gray-600">Belum ada data fasilitas untuk ruangan ini.</p>
+            <?php endif; ?>
+          </div>
+
+          <!-- CTA Pesan -->
+          <div class="bg-white rounded-3xl shadow-md p-6 flex items-center justify-between">
+            <div>
+              <h2 class="text-base font-semibold text-gray-900">Siap memesan ruangan ini?</h2>
+              <p class="text-xs text-gray-600">
+                Pilih jadwal dan buat kelompok pada langkah berikutnya.
+              </p>
             </div>
-          </div>
-        </div>
 
-        <!-- Fasilitas Ruangan -->
-        <div class="bg-white rounded-3xl shadow-md p-6 space-y-3">
-          <h2 class="text-lg font-semibold text-gray-900">Fasilitas Ruangan</h2>
-
-          <?php if (!empty($fasilitas)): ?>
-            <ul class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-700">
-              <?php foreach ($fasilitas as $fas): ?>
-                <li class="flex items-center space-x-2">
-                  <span class="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
-                  <span>
-                    <?= htmlspecialchars(is_array($fas) && isset($fas['nama_fasilitas']) ? $fas['nama_fasilitas'] : $fas); ?>
-                  </span>
-                </li>
-              <?php endforeach; ?>
-            </ul>
-          <?php else: ?>
-            <p class="text-sm text-gray-600">Belum ada data fasilitas untuk ruangan ini.</p>
-          <?php endif; ?>
-        </div>
-
-        <!-- CTA Pesan -->
-        <div class="bg-white rounded-3xl shadow-md p-6 flex items-center justify-between">
-          <div>
-            <h2 class="text-base font-semibold text-gray-900">Siap memesan ruangan ini?</h2>
-            <p class="text-xs text-gray-600">
-              Pilih jadwal dan buat kelompok pada langkah berikutnya.
-            </p>
-          </div>
-
-          <?php if ($buttonDisabled): ?>
-            <span
-              class="ml-4 px-5 py-2.5 rounded-xl bg-gray-300 text-gray-500 text-sm font-medium
+            <?php if ($buttonDisabled): ?>
+              <span
+                class="ml-4 px-5 py-2.5 rounded-xl bg-gray-300 text-gray-500 text-sm font-medium
                      cursor-not-allowed select-none">
-              Pesan
-            </span>
-          <?php else: ?>
-            <a href="index.php?controller=userBooking&action=booking&id=<?= (int)$room['id_ruangan']; ?>"
-              class="ml-4 px-5 py-2.5 rounded-xl bg-[#0F315B] text-white text-sm font-medium hover:bg-[#0b2441] transition">
-              Pesan
-            </a>
-          <?php endif; ?>
-        </div>
+                Pesan
+              </span>
+            <?php else: ?>
+              <a href="index.php?controller=userBooking&action=booking&id=<?= (int)$room['id_ruangan']; ?>"
+                class="ml-4 px-5 py-2.5 rounded-xl bg-[#0F315B] text-white text-sm font-medium hover:bg-[#0b2441] transition">
+                Pesan
+              </a>
+            <?php endif; ?>
+          </div>
 
+        </div>
       </div>
     </div>
-  </div>
+
+  </div> <!-- ✅ tutup container di sini -->
 
   <?php
   $footerPath = __DIR__ . '/../layout/footer.php';

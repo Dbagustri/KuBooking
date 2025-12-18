@@ -27,7 +27,12 @@ $fotoProfil = !empty($user['foto'])
         include $navbarPath;
     }
     ?>
-
+    <?php
+    $flashPath = __DIR__ . '/../layout/flash.php';
+    if (file_exists($flashPath)) {
+        include $flashPath;
+    }
+    ?>
     <div class="max-w-5xl mx-auto mt-8 px-4 pb-10">
 
         <!-- Back -->

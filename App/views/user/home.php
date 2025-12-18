@@ -28,7 +28,12 @@
   $hasActiveBooking = !empty($booking_aktif);
   $buttonDisabled   = (!$canBook || $hasActiveBooking);
   ?>
-
+  <?php
+  $flashPath = __DIR__ . '/../layout/flash.php';
+  if (file_exists($flashPath)) {
+    include $flashPath;
+  }
+  ?>
   <!-- ALERT JOIN ERROR (jika ada) -->
   <div class="w-full max-w-7xl mx-auto mt-6 px-4 space-y-3">
     <?php if (!empty($join_error)): ?>
@@ -156,12 +161,13 @@
         <input type="hidden" name="id_booking" id="rating_booking_id_home">
         <input type="hidden" name="rating" id="rating_value_home">
 
-        <div class="flex justify-center gap-2 text-2xl">
-          <span class="rating-star-home cursor-pointer opacity-30" data-value="1">😡</span>
-          <span class="rating-star-home cursor-pointer opacity-30" data-value="2">😞</span>
-          <span class="rating-star-home cursor-pointer opacity-30" data-value="3">😐</span>
-          <span class="rating-star-home cursor-pointer opacity-30" data-value="4">😊</span>
-          <span class="rating-star-home cursor-pointer opacity-30" data-value="5">🤩</span>
+        <!-- ⭐ STAR RATING (HOME) -->
+        <div class="flex justify-center gap-1 text-3xl" id="starRatingHome">
+          <button type="button" class="star-home text-gray-300 leading-none" data-value="1">★</button>
+          <button type="button" class="star-home text-gray-300 leading-none" data-value="2">★</button>
+          <button type="button" class="star-home text-gray-300 leading-none" data-value="3">★</button>
+          <button type="button" class="star-home text-gray-300 leading-none" data-value="4">★</button>
+          <button type="button" class="star-home text-gray-300 leading-none" data-value="5">★</button>
         </div>
 
         <textarea
@@ -240,12 +246,28 @@
       });
     }
 
-    // ⭐ RATING dari HOME
+    // ===== ⭐ RATING MODAL HOME (BINTANG NYALA SESUAI KLIK) =====
     const ratingModalHome = document.getElementById('ratingModalHome');
     const ratingCloseHome = document.getElementById('ratingCloseHome');
     const ratingBookingIdHome = document.getElementById('rating_booking_id_home');
     const ratingValueHome = document.getElementById('rating_value_home');
-    const ratingStarsHome = document.querySelectorAll('.rating-star-home');
+
+    const starWrapHome = document.getElementById('starRatingHome');
+    const starsHome = starWrapHome ? starWrapHome.querySelectorAll('.star-home') : [];
+
+    function setStarsHome(rating) {
+      const r = parseInt(rating || 0, 10);
+      starsHome.forEach(star => {
+        const v = parseInt(star.dataset.value || '0', 10);
+        if (v <= r) {
+          star.classList.remove('text-gray-300');
+          star.classList.add('text-yellow-400');
+        } else {
+          star.classList.remove('text-yellow-400');
+          star.classList.add('text-gray-300');
+        }
+      });
+    }
 
     // buka modal dari tombol di alert
     document.querySelectorAll('.open-rating-modal-home').forEach(btn => {
@@ -254,31 +276,21 @@
         if (!id) return;
 
         ratingBookingIdHome.value = id;
-        ratingValueHome.value = ''; // reset
-        ratingStarsHome.forEach(s => s.classList.add('opacity-30'));
+        ratingValueHome.value = ''; // reset rating
+        setStarsHome(0);
+
         ratingModalHome.classList.remove('hidden');
       });
     });
 
+    // close
     if (ratingCloseHome) {
       ratingCloseHome.addEventListener('click', () => {
         ratingModalHome.classList.add('hidden');
       });
     }
 
-    if (ratingStarsHome.length) {
-      ratingStarsHome.forEach(star => {
-        star.addEventListener('click', () => {
-          const value = star.dataset.value;
-          ratingValueHome.value = value;
-
-          ratingStarsHome.forEach(s => s.classList.add('opacity-30'));
-          star.classList.remove('opacity-30');
-        });
-      });
-    }
-
-    // tutup modal rating jika klik di luar box
+    // klik backdrop = close
     if (ratingModalHome) {
       ratingModalHome.addEventListener('click', (e) => {
         if (e.target === ratingModalHome) {
@@ -286,7 +298,27 @@
         }
       });
     }
+
+    // hover preview + klik set rating
+    starsHome.forEach(star => {
+      star.addEventListener('mouseenter', () => {
+        setStarsHome(star.dataset.value);
+      });
+
+      star.addEventListener('click', () => {
+        ratingValueHome.value = star.dataset.value; // klik 3 => value 3
+        setStarsHome(star.dataset.value); // nyala 3 bintang
+      });
+    });
+
+    // mouse keluar => balik ke rating terakhir
+    if (starWrapHome) {
+      starWrapHome.addEventListener('mouseleave', () => {
+        setStarsHome(ratingValueHome.value || 0);
+      });
+    }
   </script>
+
 
   <?php
   $footerPath = __DIR__ . '/../layout/footer.php';

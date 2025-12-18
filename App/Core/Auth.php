@@ -13,7 +13,6 @@ class Auth
     {
         return isset($_SESSION['user']) && !empty($_SESSION['user']);
     }
-
     public static function id(): ?int
     {
         return self::check() ? ($_SESSION['user']['id'] ?? null) : null;
@@ -66,20 +65,13 @@ class Auth
 
         session_regenerate_id(true);
     }
-
-    // apakah user boleh booking?
     public static function isActive(): bool
     {
         if (!self::check()) return false;
-
         $user = self::user();
-
-        // kalau masih di tabel registrasi → belum boleh booking
         if (($user['source'] ?? null) === 'registrasi') {
             return false;
         }
-
-        // akun aktif jika status_aktif = 'aktif'
         return ($user['status'] ?? 'aktif') === 'aktif';
     }
 

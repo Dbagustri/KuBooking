@@ -1,21 +1,14 @@
 <?php
 
-/**
- * layout/pagination.php
- * - Reusable pagination component
- * - Support multiple page keys: page, booking_page, user_page, dll
- * - Current page diprioritaskan dari URL agar tidak "stuck"
- */
-
 if (!isset($pagination) || !is_array($pagination)) return;
 
-// Ambil param utama dulu (urutannya penting!)
+// Ambil param utama dulu
 $params  = $pagination['params'] ?? [];
 $pageKey = $pagination['pageKey'] ?? 'page';
 
 $totalPages = max(1, (int)($pagination['totalPages'] ?? 1));
 
-// ✅ KUNCI: currentPage prioritas dari URL sesuai pageKey, fallback dari pagination[]
+//  KUNCI: currentPage prioritas dari URL sesuai pageKey, fallback dari pagination[]
 $currentPage = max(1, (int)($_GET[$pageKey] ?? ($pagination['currentPage'] ?? 1)));
 
 // Clamp biar aman

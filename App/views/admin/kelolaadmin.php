@@ -40,10 +40,10 @@
 
         <?php
         // Data dari controller (SuperAdminController)
-        $admins      = $admins      ?? [];
-        $currentPage = isset($currentPage) ? (int)$currentPage : (int)($_GET['page'] ?? 1);
+        $admins       = $admins      ?? [];
+        $currentPage  = isset($currentPage) ? (int)$currentPage : (int)($_GET['page'] ?? 1);
         if ($currentPage < 1) $currentPage = 1;
-        $totalPages  = isset($totalPages) ? (int)$totalPages : 1;
+        $totalPages   = isset($totalPages) ? (int)$totalPages : 1;
         $statusFilter = $statusFilter ?? 'all';
         $search       = $search       ?? '';
 
@@ -102,6 +102,7 @@
 
             <!-- TABEL ADMIN -->
             <div class="mt-4">
+                <!-- boleh tetap overflow-hidden, karena menu aksi tidak hidup di dalam card -->
                 <div class="bg-white shadow rounded-lg border border-slate-100 overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="min-w-full table-auto text-sm">
@@ -184,73 +185,16 @@
 
                                             <!-- AKSI -->
                                             <td class="px-4 py-3 text-center">
-                                                <div class="relative inline-block text-left">
-                                                    <button type="button"
-                                                        class="inline-flex w-8 h-8 items-center justify-center rounded-full
-                                                               hover:bg-gray-200 focus:outline-none focus:ring-2 
-                                                               focus:ring-offset-2 focus:ring-slate-400"
-                                                        onclick="toggleMenu(this)">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
-                                                            fill="currentColor" class="w-4 h-4 text-gray-600">
-                                                            <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
-                                                        </svg>
-                                                    </button>
-
-                                                    <div class="menu-panel hidden origin-top-right absolute right-0 mt-2 w-52 rounded-md shadow-lg
-                                                            bg-white ring-1 ring-black ring-opacity-5 z-50">
-                                                        <div class="py-1 text-sm text-gray-700">
-
-                                                            <!-- DETAIL -->
-                                                            <a href="index.php?controller=superAdmin&action=detailAdmin&id=<?= $id ?>"
-                                                                class="block px-4 py-2 hover:bg-gray-100">
-                                                                Detail Admin
-                                                            </a>
-
-                                                            <!-- EDIT -->
-                                                            <a href="index.php?controller=superAdmin&action=editAdmin&id=<?= $id ?>"
-                                                                class="block px-4 py-2 hover:bg-gray-100">
-                                                                Edit
-                                                            </a>
-
-                                                            <!-- AKTIF / NONAKTIF -->
-                                                            <?php if ($statusAktif === 'aktif'): ?>
-                                                                <form action="index.php?controller=superAdmin&action=setAdminStatus"
-                                                                    method="POST"
-                                                                    onsubmit="return confirm('Nonaktifkan akun admin ini?');">
-                                                                    <input type="hidden" name="id_admin" value="<?= $id ?>">
-                                                                    <input type="hidden" name="status" value="nonaktif">
-                                                                    <button type="submit"
-                                                                        class="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600">
-                                                                        Nonaktifkan Akun
-                                                                    </button>
-                                                                </form>
-                                                            <?php else: ?>
-                                                                <form action="index.php?controller=superAdmin&action=setAdminStatus"
-                                                                    method="POST"
-                                                                    onsubmit="return confirm('Aktifkan kembali akun admin ini?');">
-                                                                    <input type="hidden" name="id_admin" value="<?= $id ?>">
-                                                                    <input type="hidden" name="status" value="aktif">
-                                                                    <button type="submit"
-                                                                        class="w-full text-left px-4 py-2 hover:bg-emerald-50 text-emerald-700">
-                                                                        Aktifkan Akun
-                                                                    </button>
-                                                                </form>
-                                                            <?php endif; ?>
-
-                                                            <!-- HAPUS -->
-                                                            <form action="index.php?controller=superAdmin&action=deleteAdmin"
-                                                                method="POST"
-                                                                onsubmit="return confirm('Yakin ingin menghapus akun admin ini?');">
-                                                                <input type="hidden" name="id_admin" value="<?= $id ?>">
-                                                                <button type="submit"
-                                                                    class="w-full text-left px-4 py-2 border-t hover:bg-red-50 text-red-600">
-                                                                    Hapus
-                                                                </button>
-                                                            </form>
-                                                        </div>
-                                                    </div>
-
-                                                </div>
+                                                <button type="button"
+                                                    class="inline-flex w-8 h-8 items-center justify-center rounded-full
+                                                           hover:bg-gray-200 focus:outline-none focus:ring-2 
+                                                           focus:ring-offset-2 focus:ring-slate-400"
+                                                    onclick="openActionMenu(event, <?= $id ?>, '<?= htmlspecialchars($statusAktif, ENT_QUOTES) ?>')">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
+                                                        fill="currentColor" class="w-4 h-4 text-gray-600">
+                                                        <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
+                                                    </svg>
+                                                </button>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -319,27 +263,118 @@
                         </div>
                     </div>
                 <?php endif; ?>
+
             </div>
 
         </div>
     </div>
 
+    <!-- GLOBAL ACTION MENU (floating, tidak ketutupan overflow table/card) -->
+    <div id="actionMenu"
+        class="hidden fixed z-[9999] w-52 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+        <div class="py-1 text-sm text-gray-700" id="actionMenuContent"></div>
+    </div>
+
     <script>
-        function toggleMenu(btn) {
-            const panel = btn.parentElement.querySelector('.menu-panel');
-            const all = document.querySelectorAll('.menu-panel');
-            all.forEach(p => {
-                if (p !== panel) p.classList.add('hidden');
-            });
-            if (panel) panel.classList.toggle('hidden');
+        const menuEl = document.getElementById('actionMenu');
+        const contentEl = document.getElementById('actionMenuContent');
+        let activeAdminId = null;
+
+        function buildMenuHTML(id, statusAktif) {
+            const detailUrl = `index.php?controller=superAdmin&action=detailAdmin&id=${id}`;
+            const editUrl = `index.php?controller=superAdmin&action=editAdmin&id=${id}`;
+
+            const toggleForm = (statusAktif === 'aktif') ?
+                `
+                <form action="index.php?controller=superAdmin&action=setAdminStatus"
+                      method="POST"
+                      onsubmit="return confirm('Nonaktifkan akun admin ini?');">
+                    <input type="hidden" name="id_admin" value="${id}">
+                    <input type="hidden" name="status" value="nonaktif">
+                    <button type="submit"
+                        class="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600">
+                        Nonaktifkan Akun
+                    </button>
+                </form>
+                ` :
+                `
+                <form action="index.php?controller=superAdmin&action=setAdminStatus"
+                      method="POST"
+                      onsubmit="return confirm('Aktifkan kembali akun admin ini?');">
+                    <input type="hidden" name="id_admin" value="${id}">
+                    <input type="hidden" name="status" value="aktif">
+                    <button type="submit"
+                        class="w-full text-left px-4 py-2 hover:bg-emerald-50 text-emerald-700">
+                        Aktifkan Akun
+                    </button>
+                </form>
+                `;
+
+            return `
+                <a href="${detailUrl}" class="block px-4 py-2 hover:bg-gray-100">Detail Admin</a>
+                <a href="${editUrl}" class="block px-4 py-2 hover:bg-gray-100">Edit</a>
+                ${toggleForm}
+                <form action="index.php?controller=superAdmin&action=deleteAdmin"
+                      method="POST"
+                      onsubmit="return confirm('Yakin ingin menghapus akun admin ini?');">
+                    <input type="hidden" name="id_admin" value="${id}">
+                    <button type="submit"
+                        class="w-full text-left px-4 py-2 border-t hover:bg-red-50 text-red-600">
+                        Hapus
+                    </button>
+                </form>
+            `;
         }
 
-        document.addEventListener('click', function(e) {
-            const isButton = e.target.closest('button[onclick="toggleMenu(this)"]');
-            const isMenu = e.target.closest('.menu-panel');
-            if (!isButton && !isMenu) {
-                document.querySelectorAll('.menu-panel').forEach(p => p.classList.add('hidden'));
+        function openActionMenu(e, id, statusAktif) {
+            e.stopPropagation();
+
+            // toggle: klik tombol yang sama lagi -> tutup
+            if (!menuEl.classList.contains('hidden') && activeAdminId === id) {
+                closeActionMenu();
+                return;
             }
+
+            activeAdminId = id;
+            contentEl.innerHTML = buildMenuHTML(id, statusAktif);
+
+            const btnRect = e.currentTarget.getBoundingClientRect();
+            const menuWidth = 208; // w-52
+
+            let left = btnRect.right - menuWidth;
+            let top = btnRect.bottom + 8;
+
+            left = Math.max(8, Math.min(left, window.innerWidth - menuWidth - 8));
+
+            const estimatedHeight = 190;
+            if (top + estimatedHeight > window.innerHeight - 8) {
+                top = btnRect.top - estimatedHeight - 8;
+            }
+            top = Math.max(8, top);
+
+            menuEl.style.left = left + 'px';
+            menuEl.style.top = top + 'px';
+
+            menuEl.classList.remove('hidden');
+        }
+
+        function closeActionMenu() {
+            menuEl.classList.add('hidden');
+            activeAdminId = null;
+        }
+
+        // klik di luar = tutup
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#actionMenu')) closeActionMenu();
+        });
+
+        // scroll/resize = tutup (biar posisinya nggak nyasar)
+        window.addEventListener('scroll', closeActionMenu, true);
+        window.addEventListener('resize', closeActionMenu);
+
+        // ESC = tutup
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeActionMenu();
         });
     </script>
 </body>

@@ -17,11 +17,6 @@ class AdminAjaxController extends Controller
         exit;
     }
 
-    /**
-     * Ambil slot jam mulai + durasi maksimal untuk booking internal.
-     * Input: id_ruangan, tanggal (Y-m-d)
-     * Output: { success: true, slots: { "08:00": 2, "09:30": 1, ... }, message?: "" }
-     */
     public function getAvailableSlotsInternal()
     {
         Auth::requireRole(['admin', 'super_admin']);
@@ -58,12 +53,6 @@ class AdminAjaxController extends Controller
                 'message' => 'Ruangan tidak ditemukan.',
             ]);
         }
-
-        // ===========================
-        // JAM OPERASIONAL GLOBAL
-        // (bukan dari jadwal ruangan)
-        // ===========================
-        // Silakan ubah kalau jam bukanya beda
         $OPEN_TIME  = '08:00:00';
         $CLOSE_TIME = '16:00:00';
 
@@ -77,15 +66,11 @@ class AdminAjaxController extends Controller
                 'message' => 'Jam operasional perpustakaan tidak valid.',
             ]);
         }
-
-        // Semua slot 30 menit di antara jam buka–tutup
         $workingTimes = [];
         for ($t = $openTs; $t < $closeTs; $t += 30 * 60) {
             $workingTimes[] = date('H:i', $t);
         }
         $workingTimes = array_values(array_unique($workingTimes));
-
-        // ====== FILTER: buang jam yang sudah lewat untuk TANGGAL HARI INI ======
         $today = date('Y-m-d');
         if ($tanggal === $today) {
             $nowTs = time();
@@ -103,12 +88,8 @@ class AdminAjaxController extends Controller
                 'message' => 'Tidak ada slot yang tersedia pada hari tersebut.',
             ]);
         }
-
-        // Ambil slot yang sudah terpakai berdasarkan booking aktif
         $disabled = $bookingModel->getDisabledSlotsForRoomDate($idRuangan, $tanggal);
         $disabled = array_unique($disabled);
-
-        // Free = jam kerja - jam yang sudah dibooking
         $freeTimes = array_values(array_diff($workingTimes, $disabled));
         sort($freeTimes);
 
@@ -119,22 +100,16 @@ class AdminAjaxController extends Controller
                 'message' => 'Tidak ada slot yang tersedia pada hari dan ruangan yang dipilih.',
             ]);
         }
-
-        // Set untuk cek cepat
         $freeSet = array_flip($freeTimes);
 
-        $slots = []; // 'H:i' => maxDur (1–3 jam)
+        $slots = [];
 
         foreach ($freeTimes as $startTime) {
             $startTs = strtotime($tanggal . ' ' . $startTime . ':00');
             $maxDur  = 0;
-
-            // Coba durasi 1–3 jam
             for ($dur = 1; $dur <= 3; $dur++) {
                 $endTs = $startTs + $dur * 3600;
                 $ok    = true;
-
-                // cek tiap 30 menit dari start sampai sebelum end
                 for ($t = $startTs; $t < $endTs; $t += 30 * 60) {
                     $key = date('H:i', $t);
                     if (!isset($freeSet[$key])) {
@@ -212,8 +187,6 @@ class AdminAjaxController extends Controller
                 'message' => 'User ini masih memiliki peminjaman aktif.',
             ]);
         }
-
-        // ✅ Cek booking selesai yang belum diberi rating oleh user ini
         $unrated = $bookingModel->getUnratedFinishedBookingForUser($idUser);
         if ($unrated) {
             $this->jsonResponse([

@@ -74,6 +74,12 @@ $formDisabled = $booking !== null;
 
 <body class="min-h-screen bg-slate-100 text-slate-800">
   <?php require __DIR__ . '/../layout/navbar.php'; ?>
+  <?php
+  $flashPath = __DIR__ . '/../layout/flash.php';
+  if (file_exists($flashPath)) {
+    include $flashPath;
+  }
+  ?>
   <main class="max-w-6xl mx-auto px-4 py-6 space-y-4">
     <a href="index.php?controller=userBooking&action=home"
       class="flex items-center text-sm text-slate-600 hover:text-slate-900">

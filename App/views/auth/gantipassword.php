@@ -9,7 +9,12 @@
 </head>
 
 <body class="bg-[#1e3a5f] min-h-screen flex items-center justify-center p-4">
-
+    <?php
+    $flashPath = __DIR__ . '/../layout/flash.php';
+    if (file_exists($flashPath)) {
+        include $flashPath;
+    }
+    ?>
     <div class="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
         <div class="p-8">
 

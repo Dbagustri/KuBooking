@@ -24,7 +24,12 @@
     $startData  = $startData  ?? 0;
     $endData    = $endData    ?? 0;
     ?>
-
+    <?php
+    $flashPath = __DIR__ . '/../layout/flash.php';
+    if (file_exists($flashPath)) {
+        include $flashPath;
+    }
+    ?>
     <main class="max-w-6xl mx-auto px-4 py-6 space-y-4">
 
         <a href="index.php?controller=userBooking&action=home"
@@ -133,6 +138,11 @@
                                     $statusLower === 'selesai' ||
                                     ($statusLower === 'ongoing' && $end < $now)
                                 );
+
+                                $canReschedule = in_array($statusLower, ['pending', 'approved'], true)
+                                    && $start > $now;
+
+                                $canCancel = $canReschedule;
                             ?>
 
                                 <tr class="hover:bg-slate-50">
@@ -158,14 +168,14 @@
 
                                     <td class="py-3 px-3 text-center font-mono text-xs"><?= $h['booking_code'] ?></td>
 
+                                    <!-- AKSI -->
                                     <td class="py-3 px-3 text-center">
-
                                         <!-- ⭐ RATING BUTTON -->
                                         <?php if ($eligible): ?>
-                                            <?php if ($h['has_rated'] == 0): ?>
+                                            <?php if ((int)($h['has_rated'] ?? 0) === 0): ?>
                                                 <button
                                                     class="open-rating-modal px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-xs"
-                                                    data-id="<?= $h['id_bookings'] ?>">
+                                                    data-id="<?= (int)$h['id_bookings'] ?>">
                                                     ⭐ Beri Rating
                                                 </button>
                                             <?php else: ?>
@@ -177,37 +187,17 @@
                                             <?php endif; ?>
                                         <?php endif; ?>
 
-                                        <!-- ⋮ ACTION MENU -->
-                                        <div class="relative inline-block text-left ml-2">
-                                            <button class="action-menu-btn w-8 h-8 flex items-center justify-center rounded-full border">
-                                                ⋮
-                                            </button>
-
-                                            <?php
-                                            $canReschedule = in_array($statusLower, ['pending', 'approved'], true)
-                                                && $start > $now;
-
-                                            $canCancel = $canReschedule;
-                                            ?>
-
-                                            <div class="action-menu hidden absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg p-1 text-xs">
-                                                <a href="index.php?controller=userBooking&action=booking&id_ruangan=<?= $h['id_ruangan'] ?>&id_booking=<?= $h['id_bookings'] ?>"
-                                                    class="block px-3 py-1 hover:bg-slate-50">Detail</a>
-
-                                                <?php if ($canReschedule): ?>
-                                                    <a href="index.php?controller=userReschedule&action=reschedule&id_booking=<?= $h['id_bookings'] ?>"
-                                                        class="block px-3 py-1 hover:bg-slate-50">Reschedule</a>
-                                                <?php endif; ?>
-
-                                                <?php if ($canCancel): ?>
-                                                    <button
-                                                        class="cancel-booking-btn block w-full text-left px-3 py-1 hover:bg-slate-50"
-                                                        data-id-booking="<?= $h['id_bookings'] ?>">
-                                                        Batalkan
-                                                    </button>
-                                                <?php endif; ?>
-                                            </div>
-                                        </div>
+                                        <!-- ⋮ ACTION BUTTON (GLOBAL FLOATING MENU) -->
+                                        <button type="button"
+                                            class="ml-2 inline-flex w-8 h-8 items-center justify-center rounded-full border
+                                                   hover:bg-slate-100 focus:outline-none focus:ring-2
+                                                   focus:ring-offset-2 focus:ring-slate-300"
+                                            onclick="openActionMenu(event, <?= (int)$h['id_bookings'] ?>, <?= $canReschedule ? 1 : 0 ?>, <?= $canCancel ? 1 : 0 ?>, <?= (int)$h['id_ruangan'] ?>)">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
+                                                fill="currentColor" class="w-4 h-4 text-slate-600">
+                                                <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
+                                            </svg>
+                                        </button>
                                     </td>
                                 </tr>
 
@@ -255,6 +245,12 @@
         </section>
     </main>
 
+    <!-- GLOBAL ACTION MENU (floating, tidak ketutupan overflow) -->
+    <div id="actionMenu"
+        class="hidden fixed z-[9999] w-40 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+        <div class="py-1 text-xs text-slate-700" id="actionMenuContent"></div>
+    </div>
+
     <!-- ⭐ MODAL RATING -->
     <div id="ratingModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
         <div class="bg-white w-80 rounded-xl p-5 space-y-4">
@@ -265,13 +261,15 @@
 
                 <input type="hidden" name="id_booking" id="rating_booking_id">
 
-                <div class="flex justify-center gap-2 text-2xl">
-                    <span class="rating-star cursor-pointer" data-value="1">😡</span>
-                    <span class="rating-star cursor-pointer" data-value="2">😞</span>
-                    <span class="rating-star cursor-pointer" data-value="3">😐</span>
-                    <span class="rating-star cursor-pointer" data-value="4">😊</span>
-                    <span class="rating-star cursor-pointer" data-value="5">🤩</span>
+                <!-- ⭐ STAR RATING -->
+                <div class="flex justify-center gap-1 text-2xl" id="starRating">
+                    <button type="button" class="star text-gray-300" data-value="1">★</button>
+                    <button type="button" class="star text-gray-300" data-value="2">★</button>
+                    <button type="button" class="star text-gray-300" data-value="3">★</button>
+                    <button type="button" class="star text-gray-300" data-value="4">★</button>
+                    <button type="button" class="star text-gray-300" data-value="5">★</button>
                 </div>
+
 
                 <input type="hidden" name="rating" id="rating_value">
 
@@ -296,57 +294,162 @@
 
     <!-- JS -->
     <script>
+        // ===== GLOBAL ACTION MENU =====
+        const menuEl = document.getElementById('actionMenu');
+        const contentEl = document.getElementById('actionMenuContent');
+        let activeBookingId = null;
+
+        function buildMenuHTML(idBooking, canReschedule, canCancel, idRuangan) {
+            const detailUrl = `index.php?controller=userBooking&action=booking&id_ruangan=${idRuangan}&id_booking=${idBooking}`;
+            const resUrl = `index.php?controller=userReschedule&action=reschedule&id_booking=${idBooking}`;
+
+            const resItem = canReschedule ?
+                `<a href="${resUrl}" class="block px-3 py-2 hover:bg-slate-50">Reschedule</a>` :
+                ``;
+
+            const cancelItem = canCancel ?
+                `
+            <button type="button"
+                class="block w-full text-left px-3 py-2 hover:bg-slate-50"
+                onclick="handleCancel(${idBooking})">
+                Batalkan
+            </button>
+            ` :
+                ``;
+
+            return `
+            <a href="${detailUrl}" class="block px-3 py-2 hover:bg-slate-50">Detail</a>
+            ${resItem}
+            ${cancelItem}
+        `;
+        }
+
+        function openActionMenu(e, idBooking, canReschedule, canCancel, idRuangan) {
+            e.stopPropagation();
+
+            // toggle: klik tombol yang sama lagi -> tutup
+            if (!menuEl.classList.contains('hidden') && activeBookingId === idBooking) {
+                closeActionMenu();
+                return;
+            }
+
+            activeBookingId = idBooking;
+            contentEl.innerHTML = buildMenuHTML(idBooking, !!canReschedule, !!canCancel, idRuangan);
+
+            const btnRect = e.currentTarget.getBoundingClientRect();
+            const menuWidth = 160; // w-40
+
+            let left = btnRect.right - menuWidth;
+            let top = btnRect.bottom + 8;
+
+            left = Math.max(8, Math.min(left, window.innerWidth - menuWidth - 8));
+
+            const estimatedHeight = 140;
+            if (top + estimatedHeight > window.innerHeight - 8) {
+                top = btnRect.top - estimatedHeight - 8;
+            }
+            top = Math.max(8, top);
+
+            menuEl.style.left = left + 'px';
+            menuEl.style.top = top + 'px';
+
+            menuEl.classList.remove('hidden');
+        }
+
+        function closeActionMenu() {
+            menuEl.classList.add('hidden');
+            activeBookingId = null;
+        }
+
+        // klik di luar = tutup
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#actionMenu')) closeActionMenu();
+        });
+
+        // scroll/resize = tutup
+        window.addEventListener('scroll', closeActionMenu, true);
+        window.addEventListener('resize', closeActionMenu);
+
+        // ESC = tutup
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeActionMenu();
+        });
+
+        // Cancel booking (dipanggil dari menu global)
+        function handleCancel(idBooking) {
+            closeActionMenu();
+            if (confirm("Yakin ingin membatalkan booking ini?")) {
+                window.location.href =
+                    "index.php?controller=userBooking&action=cancel&id_booking=" + idBooking;
+            }
+        }
+
+        // ===== RATING MODAL (⭐ bintang nyala sesuai klik) =====
+        const ratingModal = document.getElementById('ratingModal');
+        const ratingBookingId = document.getElementById('rating_booking_id');
+        const ratingValueInput = document.getElementById('rating_value');
+        const ratingCloseBtn = document.getElementById('ratingClose');
+
+        // Pastikan HTML rating bintang pakai container id="starRating"
+        // dan tiap bintang punya class="star" data-value="1..5"
+        const starWrap = document.getElementById('starRating');
+        const stars = starWrap ? starWrap.querySelectorAll('.star') : [];
+
+        function setStars(rating) {
+            const r = parseInt(rating || 0, 10);
+            stars.forEach(star => {
+                const v = parseInt(star.dataset.value || '0', 10);
+                if (v <= r) {
+                    star.classList.remove('text-gray-300');
+                    star.classList.add('text-yellow-400');
+                } else {
+                    star.classList.remove('text-yellow-400');
+                    star.classList.add('text-gray-300');
+                }
+            });
+        }
+
         // Open rating modal
         document.querySelectorAll(".open-rating-modal").forEach(btn => {
             btn.addEventListener("click", () => {
-                document.querySelector("#rating_booking_id").value = btn.dataset.id;
-                document.querySelector("#ratingModal").classList.remove("hidden");
+                const id = btn.dataset.id || '';
+                ratingBookingId.value = id;
+                ratingValueInput.value = ''; // reset pilihan
+                setStars(0);
+                ratingModal.classList.remove("hidden");
             });
         });
 
         // Close rating modal
-        document.querySelector("#ratingClose").addEventListener("click", () => {
-            document.querySelector("#ratingModal").classList.add("hidden");
-        });
+        if (ratingCloseBtn) {
+            ratingCloseBtn.addEventListener("click", () => {
+                ratingModal.classList.add("hidden");
+            });
+        }
 
-        // Rating selection
-        document.querySelectorAll(".rating-star").forEach(star => {
-            star.addEventListener("click", () => {
-                document.querySelector("#rating_value").value = star.dataset.value;
+        // Klik backdrop untuk tutup (opsional, aman)
+        if (ratingModal) {
+            ratingModal.addEventListener('click', (e) => {
+                if (e.target === ratingModal) ratingModal.classList.add('hidden');
+            });
+        }
 
-                document.querySelectorAll(".rating-star")
-                    .forEach(s => s.classList.remove("opacity-30"));
-
-                star.classList.add("opacity-100");
+        // Hover & klik bintang
+        stars.forEach(star => {
+            star.addEventListener('mouseenter', () => setStars(star.dataset.value));
+            star.addEventListener('click', () => {
+                ratingValueInput.value = star.dataset.value; // klik 3 => value 3
+                setStars(star.dataset.value); // nyalakan 3 bintang
             });
         });
 
-        // ⋮ dropdown
-        document.addEventListener("click", e => {
-            const btn = e.target.closest(".action-menu-btn");
-            const menus = document.querySelectorAll(".action-menu");
-
-            if (btn) {
-                const menu = btn.parentElement.querySelector(".action-menu");
-                menus.forEach(m => m !== menu && m.classList.add("hidden"));
-                menu.classList.toggle("hidden");
-                return;
-            }
-
-            if (!e.target.closest(".action-menu"))
-                menus.forEach(m => m.classList.add("hidden"));
-        });
-
-        // Cancel booking
-        document.querySelectorAll(".cancel-booking-btn").forEach(btn => {
-            btn.addEventListener("click", () => {
-                if (confirm("Yakin ingin membatalkan booking ini?")) {
-                    window.location.href =
-                        "index.php?controller=userBooking&action=cancel&id_booking=" + btn.dataset.idBooking;
-                }
+        if (starWrap) {
+            starWrap.addEventListener('mouseleave', () => {
+                setStars(ratingValueInput.value || 0);
             });
-        });
+        }
     </script>
+
 
 </body>
 

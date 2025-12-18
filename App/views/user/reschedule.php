@@ -115,6 +115,12 @@ if (!empty($joinUntil)) {
 }
 
 ?>
+<?php
+$flashPath = __DIR__ . '/../layout/flash.php';
+if (file_exists($flashPath)) {
+    include $flashPath;
+}
+?>
 <!DOCTYPE html>
 <html lang="id">
 

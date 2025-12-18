@@ -129,6 +129,7 @@
 
             <!-- TABEL BOOKING -->
             <div class="mt-4">
+                <!-- overflow-hidden aman, karena menu aksi global (fixed) -->
                 <div class="bg-white shadow rounded-lg border border-slate-100 overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="min-w-full table-auto text-sm">
@@ -211,6 +212,10 @@
                                         if ($statusRaw === 'reschedule_pending') $rowBase = 'bg-purple-50';
 
                                         $isRescheduleView = in_array($statusRaw, ['reschedule_pending', 'reschedule_approved', 'reschedule_rejected'], true);
+
+                                        // untuk dropdown: apakah item "Mulai" muncul
+                                        $canStartJs = $canStart ? '1' : '0';
+                                        $isRescheduleJs = $isRescheduleView ? '1' : '0';
                                         ?>
                                         <tr class="<?= $rowBase ?> text-gray-800 border-b last:border-b-0 align-top">
                                             <td class="px-4 py-3">
@@ -294,61 +299,18 @@
                                                 </span>
                                             </td>
 
+                                            <!-- AKSI: global floating menu -->
                                             <td class="px-4 py-3 text-center">
-                                                <div class="relative inline-block text-left">
-                                                    <button type="button"
-                                                        class="inline-flex w-8 h-8 items-center justify-center rounded-full hover:bg-gray-200"
-                                                        onclick="toggleMenu(this)">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
-                                                            fill="currentColor" class="w-4 h-4 text-gray-600">
-                                                            <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
-                                                        </svg>
-                                                    </button>
-
-                                                    <div class="menu-panel hidden origin-top-right absolute right-0 mt-2 w-52 rounded-md shadow-lg
-                                                            bg-white ring-1 ring-black ring-opacity-5 z-50">
-                                                        <div class="py-1 text-sm text-gray-700">
-                                                            <?php if ($isRescheduleView): ?>
-                                                                <a href="index.php?controller=adminBooking&action=processReschedule&id_booking=<?= $id ?>"
-                                                                    class="block px-4 py-2 hover:bg-gray-100 text-purple-700">
-                                                                    Detail Reschedule
-                                                                </a>
-                                                            <?php else: ?>
-                                                                <a href="index.php?controller=adminBooking&action=detail&id=<?= $id ?>"
-                                                                    class="block px-4 py-2 hover:bg-gray-100">
-                                                                    Detail Booking
-                                                                </a>
-                                                            <?php endif; ?>
-
-                                                            <a href="index.php?controller=adminBooking&action=edit&id=<?= $id ?>"
-                                                                class="block px-4 py-2 hover:bg-gray-100">
-                                                                Edit
-                                                            </a>
-
-                                                            <?php if ($canStart): ?>
-                                                                <form action="index.php?controller=adminBooking&action=start"
-                                                                    method="POST"
-                                                                    onsubmit="return confirm('Mulai peminjaman ruangan ini sekarang?');">
-                                                                    <input type="hidden" name="id_booking" value="<?= $id ?>">
-                                                                    <button type="submit"
-                                                                        class="w-full text-left px-4 py-2 hover:bg-emerald-50 text-emerald-700">
-                                                                        Mulai Peminjaman
-                                                                    </button>
-                                                                </form>
-                                                            <?php endif; ?>
-
-                                                            <form action="index.php?controller=adminBooking&action=delete"
-                                                                method="POST"
-                                                                onsubmit="return confirm('Yakin ingin menghapus booking ini?');">
-                                                                <input type="hidden" name="id_booking" value="<?= $id ?>">
-                                                                <button type="submit"
-                                                                    class="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600">
-                                                                    Hapus
-                                                                </button>
-                                                            </form>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                                <button type="button"
+                                                    class="inline-flex w-8 h-8 items-center justify-center rounded-full
+                                                           hover:bg-gray-200 focus:outline-none focus:ring-2
+                                                           focus:ring-offset-2 focus:ring-slate-400"
+                                                    onclick="openActionMenu(event, <?= $id ?>, '<?= htmlspecialchars($statusRaw, ENT_QUOTES, 'UTF-8') ?>', <?= $isRescheduleJs ?>, <?= $canStartJs ?>)">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
+                                                        fill="currentColor" class="w-4 h-4 text-gray-600">
+                                                        <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
+                                                    </svg>
+                                                </button>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -385,6 +347,12 @@
         </div>
     </div>
 
+    <!-- GLOBAL ACTION MENU (floating, tidak ketutupan overflow table/card) -->
+    <div id="actionMenu"
+        class="hidden fixed z-[9999] w-52 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+        <div class="py-1 text-sm text-gray-700" id="actionMenuContent"></div>
+    </div>
+
     <script>
         // Filter auto jalan (status), search tetap tombol submit
         document.getElementById('statusSelect')?.addEventListener('change', function() {
@@ -394,20 +362,100 @@
             form?.submit();
         });
 
-        function toggleMenu(btn) {
-            const panel = btn.parentElement.querySelector('.menu-panel');
-            document.querySelectorAll('.menu-panel').forEach(p => {
-                if (p !== panel) p.classList.add('hidden');
-            });
-            if (panel) panel.classList.toggle('hidden');
+        const menuEl = document.getElementById('actionMenu');
+        const contentEl = document.getElementById('actionMenuContent');
+        let activeBookingId = null;
+
+        function buildMenuHTML(id, isRescheduleView, canStart) {
+            const detailUrl = `index.php?controller=adminBooking&action=detail&id=${id}`;
+            const editUrl = `index.php?controller=adminBooking&action=edit&id=${id}`;
+            const resUrl = `index.php?controller=adminBooking&action=processReschedule&id_booking=${id}`;
+
+            const detailItem = (isRescheduleView) ?
+                `<a href="${resUrl}" class="block px-4 py-2 hover:bg-gray-100 text-purple-700">Detail Reschedule</a>` :
+                `<a href="${detailUrl}" class="block px-4 py-2 hover:bg-gray-100">Detail Booking</a>`;
+
+            const startForm = (canStart) ?
+                `
+                <form action="index.php?controller=adminBooking&action=start"
+                      method="POST"
+                      onsubmit="return confirm('Mulai peminjaman ruangan ini sekarang?');">
+                    <input type="hidden" name="id_booking" value="${id}">
+                    <button type="submit"
+                        class="w-full text-left px-4 py-2 hover:bg-emerald-50 text-emerald-700">
+                        Mulai Peminjaman
+                    </button>
+                </form>
+                ` :
+                ``;
+
+            return `
+                ${detailItem}
+                <a href="${editUrl}" class="block px-4 py-2 hover:bg-gray-100">Edit</a>
+                ${startForm}
+                <form action="index.php?controller=adminBooking&action=delete"
+                      method="POST"
+                      onsubmit="return confirm('Yakin ingin menghapus booking ini?');">
+                    <input type="hidden" name="id_booking" value="${id}">
+                    <button type="submit"
+                        class="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600">
+                        Hapus
+                    </button>
+                </form>
+            `;
         }
 
-        document.addEventListener('click', function(e) {
-            const isButton = e.target.closest('button[onclick="toggleMenu(this)"]');
-            const isMenu = e.target.closest('.menu-panel');
-            if (!isButton && !isMenu) {
-                document.querySelectorAll('.menu-panel').forEach(p => p.classList.add('hidden'));
+        function openActionMenu(e, id, statusRaw, isRescheduleView, canStart) {
+            e.stopPropagation();
+
+            // toggle: klik tombol yang sama lagi -> tutup
+            if (!menuEl.classList.contains('hidden') && activeBookingId === id) {
+                closeActionMenu();
+                return;
             }
+
+            activeBookingId = id;
+            contentEl.innerHTML = buildMenuHTML(id, !!isRescheduleView, !!canStart);
+
+            const btnRect = e.currentTarget.getBoundingClientRect();
+            const menuWidth = 208; // w-52
+
+            let left = btnRect.right - menuWidth;
+            let top = btnRect.bottom + 8;
+
+            // clamp biar gak keluar layar
+            left = Math.max(8, Math.min(left, window.innerWidth - menuWidth - 8));
+
+            // kalau mepet bawah, munculkan ke atas
+            const estimatedHeight = 190;
+            if (top + estimatedHeight > window.innerHeight - 8) {
+                top = btnRect.top - estimatedHeight - 8;
+            }
+            top = Math.max(8, top);
+
+            menuEl.style.left = left + 'px';
+            menuEl.style.top = top + 'px';
+
+            menuEl.classList.remove('hidden');
+        }
+
+        function closeActionMenu() {
+            menuEl.classList.add('hidden');
+            activeBookingId = null;
+        }
+
+        // klik di luar = tutup
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#actionMenu')) closeActionMenu();
+        });
+
+        // scroll/resize = tutup (biar posisinya nggak nyasar)
+        window.addEventListener('scroll', closeActionMenu, true);
+        window.addEventListener('resize', closeActionMenu);
+
+        // ESC = tutup
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeActionMenu();
         });
     </script>
 </body>

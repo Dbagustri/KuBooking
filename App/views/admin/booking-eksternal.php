@@ -29,6 +29,13 @@
             include $flashPath;
         }
         ?>
+        <?php
+        // FILTER rooms: hanya kategori "rapat"
+        $rooms = array_values(array_filter($rooms ?? [], function ($r) {
+            $kat = strtolower(trim((string)($r['kategori'] ?? '')));
+            return $kat === 'rapat';
+        }));
+        ?>
         <!-- NAVBAR -->
         <div class="m-4">
             <?php

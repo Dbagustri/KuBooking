@@ -83,7 +83,6 @@ $current_page = max(1, (int)($_GET['page'] ?? ($current_page ?? 1)));
                         class="w-12 h-12 rounded-full bg-[#0b2a4a] text-white shadow-sm
                        hover:opacity-95 active:scale-95 transition flex items-center justify-center"
                         aria-label="Search">
-                        <!-- icon -->
                         <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M21 21l-4.35-4.35m1.35-5.15a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -148,6 +147,9 @@ $current_page = max(1, (int)($_GET['page'] ?? ($current_page ?? 1)));
                                 }
 
                                 $isFinal = in_array($status, ['approved', 'rejected'], true);
+
+                                // JS flags
+                                $isFinalJs = $isFinal ? '1' : '0';
                                 ?>
                                 <tr class="<?= $i % 2 === 0 ? 'bg-gray-50' : 'bg-gray-100' ?> text-sm">
                                     <td class="px-4 py-3">
@@ -189,44 +191,18 @@ $current_page = max(1, (int)($_GET['page'] ?? ($current_page ?? 1)));
                                         </span>
                                     </td>
 
+                                    <!-- AKSI: global floating menu -->
                                     <td class="px-4 py-3 text-center">
-                                        <div class="relative inline-block text-left">
-                                            <button type="button"
-                                                onclick="toggleMenu(<?= $rowId ?>)"
-                                                class="inline-flex justify-center w-8 h-8 rounded-full hover:bg-gray-200 text-xl leading-none">
-                                                &#8226;&#8226;&#8226;
-                                            </button>
-
-                                            <div id="menu-<?= $rowId ?>"
-                                                class="hidden origin-top-right absolute right-0 mt-2 w-44 rounded-md shadow-lg bg-white ring-1 ring-black/5 z-20 text-left">
-
-                                                <a href="index.php?controller=admin&action=detailRegistrasi&id=<?= $rowId ?>"
-                                                    class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                                                    Detail
-                                                </a>
-
-                                                <form action="index.php?controller=admin&action=approveUser" method="POST">
-                                                    <input type="hidden" name="id_registrasi" value="<?= $rowId ?>">
-                                                    <button type="submit"
-                                                        <?= $isFinal ? 'disabled' : '' ?>
-                                                        class="w-full text-left px-4 py-2 text-sm
-                                                        <?= $isFinal ? 'text-gray-400 cursor-not-allowed opacity-50' : 'text-green-700 hover:bg-green-50' ?>">
-                                                        Approve
-                                                    </button>
-                                                </form>
-
-                                                <form action="index.php?controller=admin&action=rejectUser" method="POST"
-                                                    onsubmit="return confirm('Yakin ingin menolak user ini?');">
-                                                    <input type="hidden" name="id_registrasi" value="<?= $rowId ?>">
-                                                    <button type="submit"
-                                                        <?= $isFinal ? 'disabled' : '' ?>
-                                                        class="w-full text-left px-4 py-2 text-sm border-t
-                                                        <?= $isFinal ? 'text-gray-400 cursor-not-allowed opacity-50' : 'text-red-700 hover:bg-red-50' ?>">
-                                                        Reject
-                                                    </button>
-                                                </form>
-                                            </div>
-                                        </div>
+                                        <button type="button"
+                                            class="inline-flex w-8 h-8 items-center justify-center rounded-full
+                                                   hover:bg-gray-200 focus:outline-none focus:ring-2
+                                                   focus:ring-offset-2 focus:ring-slate-400"
+                                            onclick="openActionMenu(event, <?= $rowId ?>, <?= $isFinalJs ?>)">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
+                                                fill="currentColor" class="w-4 h-4 text-gray-600">
+                                                <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
+                                            </svg>
+                                        </button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -260,6 +236,12 @@ $current_page = max(1, (int)($_GET['page'] ?? ($current_page ?? 1)));
         </div>
     </div>
 
+    <!-- GLOBAL ACTION MENU -->
+    <div id="actionMenu"
+        class="hidden fixed z-[9999] w-44 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+        <div class="py-1 text-sm text-gray-700" id="actionMenuContent"></div>
+    </div>
+
     <script>
         document.getElementById('filterSelect')?.addEventListener('change', function() {
             const form = document.getElementById('verifForm');
@@ -268,19 +250,96 @@ $current_page = max(1, (int)($_GET['page'] ?? ($current_page ?? 1)));
             form?.submit();
         });
 
-        function toggleMenu(id) {
-            const menu = document.getElementById('menu-' + id);
-            if (!menu) return;
-            menu.classList.toggle('hidden');
+        const menuEl = document.getElementById('actionMenu');
+        const contentEl = document.getElementById('actionMenuContent');
+        let activeRowId = null;
+
+        function buildMenuHTML(id, isFinal) {
+            const detailUrl = `index.php?controller=admin&action=detailRegistrasi&id=${id}`;
+
+            const approveDisabled = isFinal ? 'disabled' : '';
+            const rejectDisabled = isFinal ? 'disabled' : '';
+
+            const approveClass = isFinal ?
+                'text-gray-400 cursor-not-allowed opacity-50' :
+                'text-green-700 hover:bg-green-50';
+
+            const rejectClass = isFinal ?
+                'text-gray-400 cursor-not-allowed opacity-50' :
+                'text-red-700 hover:bg-red-50';
+
+            // NOTE: tetap sama endpoint + field name
+            return `
+                <a href="${detailUrl}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Detail</a>
+
+                <form action="index.php?controller=admin&action=approveUser" method="POST">
+                    <input type="hidden" name="id_registrasi" value="${id}">
+                    <button type="submit" ${approveDisabled}
+                        class="w-full text-left px-4 py-2 text-sm ${approveClass}">
+                        Approve
+                    </button>
+                </form>
+
+                <form action="index.php?controller=admin&action=rejectUser" method="POST"
+                      onsubmit="return ${isFinal ? 'false' : "confirm('Yakin ingin menolak user ini?')"};">
+                    <input type="hidden" name="id_registrasi" value="${id}">
+                    <button type="submit" ${rejectDisabled}
+                        class="w-full text-left px-4 py-2 text-sm border-t ${rejectClass}">
+                        Reject
+                    </button>
+                </form>
+            `;
         }
 
+        function openActionMenu(e, id, isFinal) {
+            e.stopPropagation();
+
+            // toggle: klik tombol yang sama lagi -> tutup
+            if (!menuEl.classList.contains('hidden') && activeRowId === id) {
+                closeActionMenu();
+                return;
+            }
+
+            activeRowId = id;
+            contentEl.innerHTML = buildMenuHTML(id, !!isFinal);
+
+            const btnRect = e.currentTarget.getBoundingClientRect();
+            const menuWidth = 176; // w-44
+
+            let left = btnRect.right - menuWidth;
+            let top = btnRect.bottom + 8;
+
+            left = Math.max(8, Math.min(left, window.innerWidth - menuWidth - 8));
+
+            const estimatedHeight = 160;
+            if (top + estimatedHeight > window.innerHeight - 8) {
+                top = btnRect.top - estimatedHeight - 8;
+            }
+            top = Math.max(8, top);
+
+            menuEl.style.left = left + 'px';
+            menuEl.style.top = top + 'px';
+
+            menuEl.classList.remove('hidden');
+        }
+
+        function closeActionMenu() {
+            menuEl.classList.add('hidden');
+            activeRowId = null;
+        }
+
+        // klik di luar = tutup
         document.addEventListener('click', function(e) {
-            document.querySelectorAll("[id^='menu-']").forEach(menu => {
-                const btn = menu.previousElementSibling;
-                if (!menu.contains(e.target) && !btn.contains(e.target)) {
-                    menu.classList.add('hidden');
-                }
-            });
+            if (!e.target.closest('#actionMenu')) closeActionMenu();
+        });
+
+        // scroll/resize = tutup
+        window.addEventListener('scroll', closeActionMenu, true);
+        window.addEventListener('resize', closeActionMenu);
+
+        // ESC = tutup
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeActionMenu();
         });
     </script>
 
